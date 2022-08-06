@@ -17,7 +17,7 @@ class FolderModel(BaseModel):
 
 
 class Settings(YamlModelMixin, BaseSettings):
-    root: DirectoryPath
+    source: DirectoryPath
     folders: List[FolderModel]
 
 

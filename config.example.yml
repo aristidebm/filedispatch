@@ -1,19 +1,19 @@
-root: /mnt/
+source: /mnt/
 folders:
   - label: videos
-    path: /mnt/video
+    path: /tmp/video
     # https://en.wikipedia.org/wiki/Video_file_format
     extensions: [mp4, flv, avi, mov, wmv, webm, mkv]
   - label: audios
-    path: /mnt/audio
+    path: /tmp/audio
     # https://en.wikipedia.org/wiki/Audio_file_format
     extensions: [mp3, wav, ogg]
   - label: documents
-    path: mnt/document
+    path: /tmp/document
     # https://en.wikipedia.org/wiki/Document_file_format
     # https://en.wikipedia.org/wiki/Comparison_of_e-book_formats
     extensions: [pdf, djvu, tex, ps, doc, docx, ppt, pptx, xlsx, odt, epub]
   - label: images
-    path: /mnt/images
+    path: /tmp/images
     # https://en.wikipedia.org/wiki/Image_file_format
     extensions: [png, jpg, jpeg, gif, svg]

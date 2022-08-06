@@ -8,7 +8,7 @@ import pytest
 
 @pytest.fixture
 def configfile():
-    data = """root: mnt/
+    data = """source: mnt/
 folders:
   - label: videos
     path: mnt/video
