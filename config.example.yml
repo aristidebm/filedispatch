@@ -1,19 +1,16 @@
+#### Perhaps the config must be a list of objects in order to register multiple sources too watch ?
 source: /mnt/
 folders:
-  - label: videos
-    path: /tmp/video
+  - path: /tmp/video
     # https://en.wikipedia.org/wiki/Video_file_format
     extensions: [mp4, flv, avi, mov, wmv, webm, mkv]
-  - label: audios
-    path: /tmp/audio
+  - path: /tmp/audio
     # https://en.wikipedia.org/wiki/Audio_file_format
     extensions: [mp3, wav, ogg]
-  - label: documents
-    path: /tmp/document
+  - path: /tmp/document
     # https://en.wikipedia.org/wiki/Document_file_format
     # https://en.wikipedia.org/wiki/Comparison_of_e-book_formats
     extensions: [pdf, djvu, tex, ps, doc, docx, ppt, pptx, xlsx, odt, epub]
-  - label: images
-    path: /tmp/images
+  - path: /tmp/images
     # https://en.wikipedia.org/wiki/Image_file_format
     extensions: [png, jpg, jpeg, gif, svg]

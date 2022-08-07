@@ -10,17 +10,13 @@ import pytest
 def configfile():
     data = """source: mnt/
 folders:
-  - label: videos
-    path: mnt/video
+  - path: mnt/video
     extensions: [mp4, flv, avi, mov, wmv, webm, mkv]
-  - label: audios
-    path: mnt/audio
+  - path: mnt/audio
     extensions: [mp3, wav, ogg]
-  - label: documents
-    path: mnt/document 
+  - path: mnt/document 
     extensions: [pdf, djvu, tex, ps, doc, docx, ppt, pptx, xlsx, odt, epub]
-  - label: images
-    path: mnt/image
+  - path: mnt/image
     extensions: [png, jpg, jpeg, gif, svg]
     """
     config = NamedTemporaryFile(mode="w+", suffix=".yml")
@@ -28,6 +24,7 @@ folders:
     config.flush()  # Veru important, without this file will seems to be empty
     # https://docs.pytest.org/en/6.2.x/fixture.html#teardown-cleanup-aka-fixture-finalization
     yield config
+    config.close()
 
 
 @pytest.fixture

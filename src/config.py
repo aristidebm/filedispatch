@@ -10,7 +10,6 @@ logger.setLevel(logging.DEBUG)
 
 
 class FolderModel(BaseModel):
-    label: constr(max_length=255)
     path: DirectoryPath
     # https://en.wikipedia.org/wiki/List_of_filename_extensions
     extensions: List[constr(max_length=10)]
@@ -27,8 +26,15 @@ class Config:
 
     def __call__(self, *args, **kwargs):
         try:
-            return Settings.parse_file(self.config)
+            logger.info("Parsing config file ...")
+            config = Settings.parse_file(self.config)
+            self._logfile()
+            return config
         except (ValidationError, ValueError, OSError) as exp:
             logger.error(exp)
             logger.debug(exp)
             return
+
+    def _logfile(self):
+        with open(self.config) as f:
+            logger.info(f"\n{f.read()}\n")

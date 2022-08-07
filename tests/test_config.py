@@ -8,16 +8,12 @@ from src.config import Config
 def bad_configfile():
     data = """source: mnt/
 folders:
-  - label: videos
-    path: mnt/video
+  - path: mnt/video
     extensions: [mp4, flv, avi, mov, wmv, webm, mkv]
-  - label: audios # missing path
-    extensions: [mp3, wav, ogg] 
-  - label: documents
-    path: mnt/document 
+  - extensions: [mp3, wav, ogg] 
+  - path: mnt/document 
     extensions: [pdf, djvu, tex, ps, doc, docx, ppt, pptx, xlsx, odt, epub]
-  - label: images
-    path: mnt/image
+  - path: mnt/image
     extensions: [png, jpg, jpeg, gif, svg]
     """
     config = NamedTemporaryFile(mode="w+", suffix=".yml")
@@ -27,6 +23,7 @@ folders:
     yield config
 
 
+@pytest.mark.config
 def test_config_generation_success(mocker, configfile, filesystem):
     mock = mocker.patch("src.config.logger.debug")
     conf = Config(config=configfile.name)()
@@ -34,6 +31,7 @@ def test_config_generation_success(mocker, configfile, filesystem):
     mock.assert_not_called()
 
 
+@pytest.mark.config
 def test_config_generation_failure(mocker, bad_configfile, filesystem):
     debug = mocker.patch("src.config.logger.debug")
     error = mocker.patch("src.config.logger.error")
