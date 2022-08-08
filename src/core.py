@@ -63,18 +63,13 @@ class FileDispatch(mode.Service):
                 if not dest:
                     continue
 
-                print(f"filename: {filename} destination: {dest}")
                 await self.unprocessed.put((filename, dest))
-                # FIXME: To be removed
-                print(f"Queue size after put: {self.unprocessed.qsize()}")
                 logger.info(f"File {filename} is appended to be processed")
 
     @mode.Service.task
     async def _process(self):
         while True:
-            # FIXME: The Queue is empty here. Why ?
             file_ = await self.unprocessed.get()
-            # file_ = self.unprocessed.get_nowait()
             self._move(*file_)
             self.unprocessed.task_done()
 

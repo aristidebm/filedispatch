@@ -1,5 +1,6 @@
 import asyncio
 import os.path
+import stat
 from tempfile import NamedTemporaryFile
 from pathlib import Path
 
@@ -28,26 +29,72 @@ def config(configfile, filesystem):
 
 @pytest.mark.asyncio
 @pytest.mark.dispatcher
-async def test_file_dispatch_success(mocker, config, filesystem):
+async def test_file_task_producer_success(mocker, config, filesystem):
     queue_put = mocker.patch("src.core.Queue.put")
-    move = mocker.patch("src.core.move")
-    logger = mocker.patch("src.core.logger.exception")
 
     async with FileDispatch(config=config) as dispatcher:
         await asyncio.sleep(1)
 
         assert dispatcher.unprocessed.empty()
         filename = create_file(filesystem, ext="mp4")
-
-        await asyncio.sleep(1)
-
         assert contains(Path(filesystem.name) / "mnt", filename.name)
 
         await asyncio.sleep(1)
 
         # Make sure the file is added to the processing queue
         queue_put.assert_awaited_once()
-        # Make sure the file is moved
+
+
+@pytest.mark.asyncio
+@pytest.mark.dispatcher
+async def test_file_task_consumer_success(mocker, config, filesystem):
+    move = mocker.patch("src.core.move")
+
+    async with FileDispatch(config=config) as dispatcher:
+        await asyncio.sleep(1)
+
+        assert dispatcher.unprocessed.empty()
+        filename = create_file(filesystem, ext="mp4")
+        assert contains(Path(filesystem.name) / "mnt", filename.name)
+
+        await asyncio.sleep(1)
+
+        # Make sure the file is added to the processing queue
         move.assert_called_once()
-        # Make sure an exception is not thrown
-        logger.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.dispatcher
+async def test_file_task_consumer_failure_for_permissions(mocker, config, filesystem):
+    logger = mocker.patch("src.core.logger.exception")
+
+    async with FileDispatch(config=config) as dispatcher:
+        await asyncio.sleep(1)
+
+        assert dispatcher.unprocessed.empty()
+        mode = 0o000
+        assert stat.filemode(mode) == "?---------"
+        os.chmod(Path(filesystem.name) / "mnt" / "video", mode)
+        filename = create_file(filesystem, ext="mp4")
+        assert contains(Path(filesystem.name) / "mnt", filename.name)
+        await asyncio.sleep(1)
+
+        # Make sure the file is added to the processing queue
+        logger.assert_called_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.dispatcher
+async def test_file_task_producer_file_collection(mocker, config, filesystem):
+    queue_put = mocker.patch("src.core.Queue.put")
+
+    await asyncio.sleep(1)
+
+    filename = create_file(filesystem, ext="mp4")
+    assert contains(Path(filesystem.name) / "mnt", filename.name)
+
+    await asyncio.sleep(1)
+
+    async with FileDispatch(config=config):
+        # Make sure the file is added to the processing queue
+        queue_put.assert_called_once()
