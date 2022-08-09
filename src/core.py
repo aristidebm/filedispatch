@@ -18,12 +18,12 @@ PATH = Union[str, Path]
 
 
 class BaseDispatch(mode.Service):
-    PROCESSORS = {}
-
     def __init_subclass__(cls, **kwargs):
-        cls.PROCESSORS["local"] = LocalStorageProcessor()
-        cls.PROCESSORS["ftp"] = FtpStorageProcessor()
-        cls.PROCESSORS["http"] = HttpStorageProcessor()
+        cls.PROCESSORS = dict(
+            local=LocalStorageProcessor(),
+            ftp=FtpStorageProcessor(),
+            http=HttpStorageProcessor(),
+        )
 
 
 class FileDispatch(BaseDispatch):
