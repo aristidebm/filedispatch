@@ -1,10 +1,13 @@
 from typing import Union
 from pathlib import Path
+from functools import wraps
 from asyncio import Queue
 import abc
 import os
 import shutil
 import logging
+
+from aiofiles.os import wrap
 
 PATH = Union[str, Path]
 
@@ -12,58 +15,82 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-async def produce(f):
-    def wrapper(self, filename, destination, *args, **kwargs):
-        await self.unprocessed.put((filename, destination))
+class RemoteStorageMixin:
+    # FIXME: Make the function more generic.
+    @classmethod
+    def produce(cls, method):
+        f = getattr(cls, method, None)
 
-    return wrapper
+        if not callable(f):
+            return
+
+        @wraps(f)
+        async def wrapper(self, filename, destination, **kwargs):
+            await self.unprocessed.put((filename, destination))
+            await f(self, filename, destination, **kwargs)
+            await self.unprocessed.task_done()
+
+        setattr(cls, wrapper.__name__, wrapper)
 
 
-class BaseProcessor(abc.ABC):
-    ...
+class BaseStorageProcessor(abc.ABC):
+    fancy_name = "Base Processor"
 
     @abc.abstractmethod
-    def process(self, filename, destination, **kwargs) -> None:
+    async def process(self, filename, destination, **kwargs) -> None:
         ...
 
+    @classmethod
+    def create(cls, **kwargs):
+        instance = cls()
+        return instance
 
-class LocalStorageProcessor(BaseProcessor):
-    ...
 
-    def process(self, filename: PATH, destination: PATH, **kwargs):
+class RemoteStorageProcessor(RemoteStorageMixin, BaseStorageProcessor):
+
+    fancy_name = "Remote Processor"
+
+    @classmethod
+    def create(cls, **kwargs):
+        instance = super().create()
+        instance.unprocessed = Queue()
+        cls.produce("process")
+        return instance
+
+
+class LocalStorageProcessor(BaseStorageProcessor):
+
+    fancy_name = "Local processor"
+
+    async def process(self, filename: PATH, destination: PATH, **kwargs):
         return self._move(filename, destination)
 
-    def _move(self, filename: PATH, dest: PATH):
+    # replace this with async version using this thread https://stackoverflow.com/a/70586756/13837279.
+    async def _move(self, filename: PATH, dest: PATH):
+        move = wrap(shutil.move)
         try:
             # See hereh wy we choose it over os.rename os.rename
             # https://www.codespeedy.com/difference-between-os-rename-and-shutil-move-in-python/
             basename = os.path.basename(filename)
-            shutil.move(filename, os.path.join(dest, basename))
+            # await move(filename, os.path.join(dest, basename))
+            await move(filename, os.path.join(dest, basename))
         except OSError as exp:
             logger.exception(exp)
 
         logger.info(f"File {filename} moved to {dest}")
 
 
-class RemoteStorageProcessor(BaseProcessor):
-    def __init__(self):
-        self.unprocessed = Queue()
-        # FIXME: can't do async stuff in __init__. can't decorate coroutine like that.
-        self.process = produce(self.process)(self)
-
-    def process(self, filename, destination, **kwargs):
-        ...
-
-
 class FtpStorageProcessor(RemoteStorageProcessor):
-    ...
 
-    def process(self, filename, destination, **kwargs):
+    fancy_name = "FTP processor"
+
+    async def process(self, filename, destination, **kwargs) -> None:
         ...
 
 
 class HttpStorageProcessor(RemoteStorageProcessor):
-    ...
 
-    def process(self, filename, destination, **kwargs):
+    fancy_name = "HTTP processor"
+
+    async def process(self, filename, destination, **kwargs) -> None:
         ...

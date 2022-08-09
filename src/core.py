@@ -19,10 +19,15 @@ PATH = Union[str, Path]
 
 class BaseDispatch(mode.Service):
     def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__()
+        cls._register_processor()
+
+    @classmethod
+    def _register_processor(cls):
         cls.PROCESSORS = dict(
-            local=LocalStorageProcessor(),
-            ftp=FtpStorageProcessor(),
-            http=HttpStorageProcessor(),
+            local=LocalStorageProcessor.create(),
+            ftp=FtpStorageProcessor.create(),
+            http=HttpStorageProcessor.create(),
         )
 
 
@@ -80,17 +85,17 @@ class FileDispatch(BaseDispatch):
         while True:
             filename, destination = await self.unprocessed.get()
             processor = self._get_processor(destination)
-            processor.process(filename, destination)
+            await processor.process(filename, destination)
             self.unprocessed.task_done()
 
     def _get_processor(self, destination, **kwargs):
         def find_protocol():
-            """
-            FIXME: To be implemented
-            """
-            return destination
+            protocols = ["local", "ftp", "http"]
+            return protocols[0]
 
-        return self.PROCESSORS[find_protocol()]
+        processor = self.PROCESSORS[find_protocol()]
+        logger.info(f"{processor.fancy_name} is used to process {destination}")
+        return processor
 
     def _find_destination(self, filename: PATH, config=None, mapping=None) -> PATH:
         mapping = mapping or {}

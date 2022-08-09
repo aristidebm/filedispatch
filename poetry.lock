@@ -1,4 +1,12 @@
 [[package]]
+name = "aiofiles"
+version = "0.8.0"
+description = "File support for asyncio."
+category = "main"
+optional = false
+python-versions = ">=3.6,<4.0"
+
+[[package]]
 name = "aioftp"
 version = "0.21.3"
 description = "ftp client/server for asyncio"
@@ -668,9 +676,10 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10"
-content-hash = "ef31fc75dbd0ff6c82fc0aa54696dd43f372422701a95d77f84e3ef80c99cfc6"
+content-hash = "7252bb6561b84236598fd402f71e44d36008dfcf21eaec3e0055c0e5982696c1"
 
 [metadata.files]
+aiofiles = []
 aioftp = []
 aiohttp = []
 aiosignal = []
