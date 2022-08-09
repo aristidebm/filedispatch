@@ -3,11 +3,11 @@ import logging
 from typing import Union, Tuple
 from pathlib import Path
 from asyncio import Queue
-from shutil import move
 
 import mode
 from watchfiles import awatch, Change
-import os.path
+
+from .processors import LocalStorageProcessor, FtpStorageProcessor, HttpStorageProcessor
 
 from .config import Settings
 
@@ -17,7 +17,16 @@ logger.setLevel(logging.DEBUG)
 PATH = Union[str, Path]
 
 
-class FileDispatch(mode.Service):
+class BaseDispatch(mode.Service):
+    PROCESSORS = {}
+
+    def __init_subclass__(cls, **kwargs):
+        cls.PROCESSORS["local"] = LocalStorageProcessor()
+        cls.PROCESSORS["ftp"] = FtpStorageProcessor()
+        cls.PROCESSORS["http"] = HttpStorageProcessor()
+
+
+class FileDispatch(BaseDispatch):
     def __init__(self, config: Settings):
         super().__init__()
         self.config = config
@@ -69,20 +78,19 @@ class FileDispatch(mode.Service):
     @mode.Service.task
     async def _process(self):
         while True:
-            file_ = await self.unprocessed.get()
-            self._move(*file_)
+            filename, destination = await self.unprocessed.get()
+            processor = self._get_processor(destination)
+            processor.process(filename, destination)
             self.unprocessed.task_done()
 
-    def _move(self, filename: PATH, dest: PATH):
-        try:
-            # See hereh wy we choose it over os.rename os.rename
-            # https://www.codespeedy.com/difference-between-os-rename-and-shutil-move-in-python/
-            basename = os.path.basename(filename)
-            move(filename, os.path.join(dest, basename))
-        except OSError as exp:
-            logger.exception(exp)
+    def _get_processor(self, destination, **kwargs):
+        def find_protocol():
+            """
+            FIXME: To be implemented
+            """
+            return destination
 
-        logger.info(f"File {filename} moved to {dest}")
+        return self.PROCESSORS[find_protocol()]
 
     def _find_destination(self, filename: PATH, config=None, mapping=None) -> PATH:
         mapping = mapping or {}
