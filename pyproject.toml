@@ -11,6 +11,10 @@ pytest-mock = "^3.8.2"
 mode = { git = "https://github.com/aristidebm/mode.git" }
 # The depencicies is pinned to v0.15 because of this https://github.com/samuelcolvin/watchfiles/issues/177
 watchfiles = "0.15"
+httpx = "^0.23.0"
+aioftp = "^0.21.3"
+aiohttp = "^3.8.1"
+pytest-aiohttp = "^1.0.4"
 
 [tool.poetry.dev-dependencies]
 black = "^22.6.0"

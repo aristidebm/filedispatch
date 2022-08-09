@@ -48,7 +48,7 @@ async def test_file_task_producer_success(mocker, config, filesystem):
 @pytest.mark.asyncio
 @pytest.mark.dispatcher
 async def test_file_task_consumer_success(mocker, config, filesystem):
-    move = mocker.patch("src.core.move")
+    process = mocker.patch("src.core.LocalStorageProcessor.process")
 
     async with FileDispatch(config=config) as dispatcher:
         await asyncio.sleep(1)
@@ -60,13 +60,13 @@ async def test_file_task_consumer_success(mocker, config, filesystem):
         await asyncio.sleep(1)
 
         # Make sure the file is added to the processing queue
-        move.assert_called_once()
+        process.assert_called_once()
 
 
 @pytest.mark.asyncio
 @pytest.mark.dispatcher
 async def test_file_task_consumer_failure_for_permissions(mocker, config, filesystem):
-    logger = mocker.patch("src.core.logger.exception")
+    logger = mocker.patch("src.processor.logger.exception")
 
     async with FileDispatch(config=config) as dispatcher:
         await asyncio.sleep(1)
