@@ -8,7 +8,7 @@ import mode
 from watchfiles import awatch, Change
 
 from .processors import LocalStorageProcessor, FtpStorageProcessor, HttpStorageProcessor
-
+from .utils import get_protocol
 from .config import Settings
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ class BaseDispatch(mode.Service):
     @classmethod
     def _register_processor(cls):
         cls.PROCESSORS = dict(
-            local=LocalStorageProcessor.create(),
+            file=LocalStorageProcessor.create(),
             ftp=FtpStorageProcessor.create(),
             http=HttpStorageProcessor.create(),
         )
@@ -89,11 +89,7 @@ class FileDispatch(BaseDispatch):
             self.unprocessed.task_done()
 
     def _get_processor(self, destination, **kwargs):
-        def find_protocol():
-            protocols = ["local", "ftp", "http"]
-            return protocols[0]
-
-        processor = self.PROCESSORS[find_protocol()]
+        processor = self.PROCESSORS[get_protocol(destination)]
         logger.info(f"{processor.fancy_name} is used to process {destination}")
         return processor
 
