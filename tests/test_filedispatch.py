@@ -47,7 +47,7 @@ async def test_file_task_producer_success(mocker, config, filesystem):
 
 @pytest.mark.asyncio
 @pytest.mark.dispatcher
-async def test_file_task_consumer_success(mocker, config, filesystem):
+async def test_local_storage_consuming_success(mocker, config, filesystem):
     process = mocker.patch("src.core.LocalStorageProcessor.process")
 
     async with FileDispatch(config=config) as dispatcher:
@@ -65,7 +65,9 @@ async def test_file_task_consumer_success(mocker, config, filesystem):
 
 @pytest.mark.asyncio
 @pytest.mark.dispatcher
-async def test_file_task_consumer_failure_for_permissions(mocker, config, filesystem):
+async def test_local_storage_consuming_failure_for_permissions(
+    mocker, config, filesystem
+):
     logger = mocker.patch("src.processors.logger.exception")
 
     async with FileDispatch(config=config) as dispatcher:
@@ -85,7 +87,7 @@ async def test_file_task_consumer_failure_for_permissions(mocker, config, filesy
 
 @pytest.mark.asyncio
 @pytest.mark.dispatcher
-async def test_file_task_producer_file_collection(mocker, config, filesystem):
+async def test_producer_collector(mocker, config, filesystem):
     queue_put = mocker.patch("src.core.Queue.put")
 
     await asyncio.sleep(1)

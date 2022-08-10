@@ -1,5 +1,3 @@
-from typing import Union
-from pathlib import Path
 from functools import wraps
 from asyncio import Queue
 import abc
@@ -8,11 +6,14 @@ import shutil
 import logging
 
 from aiofiles.os import wrap
+import aiohttp
+import aioftp
 
-PATH = Union[str, Path]
+from .utils import PATH
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
+async_move = wrap(shutil.move)
 
 
 class RemoteStorageMixin:
@@ -25,7 +26,7 @@ class RemoteStorageMixin:
             return
 
         @wraps(f)
-        async def wrapper(self, filename, destination, **kwargs):
+        async def wrapper(self, filename: PATH, destination: PATH, **kwargs):
             await self.unprocessed.put((filename, destination))
             await f(self, filename, destination, **kwargs)
             await self.unprocessed.task_done()
@@ -37,7 +38,7 @@ class BaseStorageProcessor(abc.ABC):
     fancy_name = "Base Processor"
 
     @abc.abstractmethod
-    async def process(self, filename, destination, **kwargs) -> None:
+    async def process(self, filename: PATH, destination: PATH, **kwargs) -> None:
         ...
 
     @classmethod
@@ -57,23 +58,30 @@ class RemoteStorageProcessor(RemoteStorageMixin, BaseStorageProcessor):
         cls.produce("process")
         return instance
 
+    async def process(self, filename, destination, **kwargs) -> None:
+        filename, destination = await self.unprocessed.get()
+        await self._send(filename, destination, **kwargs)
+
+    @abc.abstractmethod
+    async def _send(self, filename, destination, **kwargs) -> None:
+        ...
+
 
 class LocalStorageProcessor(BaseStorageProcessor):
 
     fancy_name = "Local processor"
 
     async def process(self, filename: PATH, destination: PATH, **kwargs):
-        return self._move(filename, destination)
+        await self._move(filename, destination)
 
     # replace this with async version using this thread https://stackoverflow.com/a/70586756/13837279.
     async def _move(self, filename: PATH, dest: PATH):
-        move = wrap(shutil.move)
         try:
             # See hereh wy we choose it over os.rename os.rename
             # https://www.codespeedy.com/difference-between-os-rename-and-shutil-move-in-python/
             basename = os.path.basename(filename)
             # await move(filename, os.path.join(dest, basename))
-            await move(filename, os.path.join(dest, basename))
+            await async_move(filename, os.path.join(dest, basename))
         except OSError as exp:
             logger.exception(exp)
 
@@ -84,7 +92,7 @@ class FtpStorageProcessor(RemoteStorageProcessor):
 
     fancy_name = "FTP processor"
 
-    async def process(self, filename, destination, **kwargs) -> None:
+    async def _send(self, filename, destination, **kwargs):
         ...
 
 
@@ -92,5 +100,14 @@ class HttpStorageProcessor(RemoteStorageProcessor):
 
     fancy_name = "HTTP processor"
 
-    async def process(self, filename, destination, **kwargs) -> None:
-        ...
+    async def _send(self, filename, destination, **kwargs):
+        # https://docs.aiohttp.org/en/stable/
+        # https://docs.aiohttp.org/en/stable/multipart.html#sending-multipart-requests
+        # https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types#multipartform-data
+        async with aiohttp.ClientSession() as session:
+            async with session.post(destination) as response:
+                print("Status:", response.status)
+                print("Content-type:", response.headers["content-type"])
+
+                html = await response.text()
+                print("Body:", html[:15], "...")

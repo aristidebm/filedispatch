@@ -8,13 +8,11 @@ import mode
 from watchfiles import awatch, Change
 
 from .processors import LocalStorageProcessor, FtpStorageProcessor, HttpStorageProcessor
-from .utils import get_protocol
+from .utils import get_protocol, PATH
 from .config import Settings
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-
-PATH = Union[str, Path]
 
 
 class BaseDispatch(mode.Service):
