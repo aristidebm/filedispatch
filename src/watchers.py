@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-class BaseDispatch(mode.Service):
+class BaseWatcher(mode.Service):
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__()
         cls._register_processor()
@@ -23,17 +23,21 @@ class BaseDispatch(mode.Service):
     @classmethod
     def _register_processor(cls):
         cls.PROCESSORS = dict(
-            file=LocalStorageProcessor.create(),
-            ftp=FtpStorageProcessor.create(),
-            http=HttpStorageProcessor.create(),
+            file=LocalStorageProcessor(),
+            ftp=FtpStorageProcessor(),
+            http=HttpStorageProcessor(),
         )
 
 
-class FileDispatch(BaseDispatch):
+class FileWatcher(BaseWatcher):
     def __init__(self, config: Settings):
         super().__init__()
         self.config = config
         self.unprocessed: Queue[Tuple[PATH, PATH]] = Queue()
+
+    async def on_start(self) -> None:
+        for processor in self.PROCESSORS.values():
+            await self.add_runtime_dependency(processor)
 
     async def on_started(self) -> None:
         await super().on_started()
@@ -79,11 +83,11 @@ class FileDispatch(BaseDispatch):
                 logger.info(f"File {filename} is appended to be processed")
 
     @mode.Service.task
-    async def _process(self):
+    async def _provide(self):
         while True:
             filename, destination = await self.unprocessed.get()
             processor = self._get_processor(destination)
-            await processor.process(filename, destination)
+            await processor.acquire(filename, destination)
             self.unprocessed.task_done()
 
     def _get_processor(self, destination, **kwargs):
