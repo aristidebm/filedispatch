@@ -7,8 +7,10 @@ from src.watchers import FileWatcher
 from .base import create_file, contains
 
 
+pytestmark = pytest.mark.notif
+
+
 @pytest.mark.asyncio
-@pytest.mark.process
 async def test_local_storage_processor_process_the_file(mocker, config, filesystem):
     acquire = mocker.patch("src.notifiers.Notifier.acquire")
 

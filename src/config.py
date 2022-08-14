@@ -1,16 +1,18 @@
 import logging
 from typing import List, Union
 from pathlib import Path
-from pydantic import BaseModel, BaseSettings, DirectoryPath, constr
+from pydantic import BaseModel, BaseSettings, DirectoryPath, constr, HttpUrl
 from pydantic_yaml import YamlModelMixin
 from pydantic.error_wrappers import ValidationError
+
+from .utils import FtpUrl
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
 class FolderModel(BaseModel):
-    path: Path
+    path: Union[str, HttpUrl, FtpUrl, Path]
     # https://en.wikipedia.org/wiki/List_of_filename_extensions
     extensions: List[constr(max_length=10)]
 

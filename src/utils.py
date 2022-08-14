@@ -14,6 +14,8 @@ PATH = Union[str, Path]
 
 
 def get_protocol(url: str) -> str:
+    # Pydantic regexp consider http://localhost:8080 as an invalid http url
+    url = clean_url(url)
     for k, f in FIELDS.items():
         try:
             parse_obj_as(f, url)
@@ -21,3 +23,11 @@ def get_protocol(url: str) -> str:
         except error_wrappers.ValidationError:
             continue
     return "file"
+
+
+def clean_url(url: str) -> str:
+    # Pydantic regexp consider http://localhost:8080 as an invalid http url
+    if url.startswith("http") or url.startswith("ftp") or url.startswith("sftp"):
+        return url.replace("localhost", "127.0.0.1")
+
+    return url

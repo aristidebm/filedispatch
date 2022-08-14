@@ -5,6 +5,9 @@ import pytest_asyncio
 from src.config import Config
 
 
+pytestmark = pytest.mark.config
+
+
 @pytest_asyncio.fixture
 def bad_configfile():
     data = """source: mnt/

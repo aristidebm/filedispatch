@@ -1,6 +1,7 @@
 import os
 import tempfile
-import aiofiles
+from aiohttp import web
+from aiohttp.web_routedef import RouteDef
 
 
 def create_file(filesystem, ext="txt", is_file=True):
@@ -18,3 +19,22 @@ def create_file(filesystem, ext="txt", is_file=True):
 
 def contains(folder, file):
     return os.path.basename(file) in os.listdir(folder)
+
+
+from aiohttp import web
+
+
+async def hello(request):
+    return web.Response(body=b"Hello, world")
+
+
+def make_app(routes=None):
+    # routes
+    async def healfcheck(request):
+        return web.Response(body=b"running ...")
+
+    routes = routes or []
+    routes = routes + [RouteDef(method="GET", path="/", handler=healfcheck, **{})]
+    app = web.Application()
+    app.router.add_routes(routes)
+    return app

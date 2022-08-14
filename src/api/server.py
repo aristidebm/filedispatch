@@ -19,11 +19,14 @@
 # - By file extension
 # - By file name
 # - By used protocol
-
+import asyncio
 import logging
 import mode
 from aiohttp import web
 from aiohttp_pydantic import oas
+import nest_asyncio
+
+nest_asyncio.apply()
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -42,7 +45,14 @@ class WebServer(mode.Service):
 
     async def on_started(self) -> None:
         ...
-        # web.run_app(self.make_app(), host=self.host)
+        # aiohttp call loop.run_util_complete on the loop, that generate
+        # an error since the loop is already running https://github.com/aio-libs/aiohttp/blob/master/aiohttp/web.py#L447
+        # An issue is open here since 2017 # https://github.com/aio-libs/aiohttp/issues/2608
+        # loop = asyncio.get_running_loop()
+
+        # normally it permit to run more than on event_loop, but got a weird error socket.gaierror: [Errno -2] Name or service not known
+        nest_asyncio.apply()
+        web.run_app(self.make_app(), host=self.host)
 
     async def on_stop(self) -> None:
         pass

@@ -5,11 +5,8 @@ import asyncio
 import os
 import tempfile
 import pytest
-import pytest_asyncio
 
 from src.cli import Config
-
-# https://stackoverflow.com/questions/66054356/multiple-async-unit-tests-fail-but-running-them-one-by-one-will-passa
 
 
 @pytest.fixture
@@ -24,7 +21,7 @@ def configfile():
 folders:
   - path: mnt/video
     extensions: [mp4, flv, avi, mov, wmv, webm, mkv]
-  - path: http://localhost/documents/audio
+  - path: http://localhost:8000/documents/audio
     extensions: [mp3, wav, ogg]
   - path: ftp://username:password@localhost/home/user/documents
     extensions: [pdf, djvu, tex, ps, doc, docx, ppt, pptx, xlsx, odt, epub]

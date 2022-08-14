@@ -21,6 +21,7 @@ PyPika = "^0.48.9"
 aiosqlite = "^0.17.0"
 aiohttp-pydantic = "^1.12.2"
 aiohttp-retry = "^2.8.3"
+nest-asyncio = "^1.5.5"
 
 [tool.poetry.dev-dependencies]
 black = "^22.6.0"

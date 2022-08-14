@@ -11,9 +11,10 @@ from src.watchers import FileWatcher
 
 from .base import create_file, contains
 
+pytestmark = pytest.mark.watcher
+
 
 @pytest.mark.asyncio
-@pytest.mark.watcher
 async def test_new_files_are_queued(mocker, config, filesystem):
     queue_put = mocker.patch("src.watchers.Queue.put")
 
@@ -31,7 +32,6 @@ async def test_new_files_are_queued(mocker, config, filesystem):
 
 
 @pytest.mark.asyncio
-@pytest.mark.watcher
 async def test_existing_files_are_queued(mocker, config, filesystem):
     queue_put = mocker.patch("src.watchers.Queue.put")
 
@@ -48,7 +48,6 @@ async def test_existing_files_are_queued(mocker, config, filesystem):
 
 
 @pytest.mark.asyncio
-@pytest.mark.watcher
 async def test_ignore_new_directories_and_symlinks(mocker, config, filesystem):
 
     queue_put = mocker.patch("src.watchers.Queue.put")
@@ -67,7 +66,6 @@ async def test_ignore_new_directories_and_symlinks(mocker, config, filesystem):
 
 
 @pytest.mark.asyncio
-@pytest.mark.watcher
 async def test_ignore_source_subdirectories_changes(mocker, config, filesystem):
 
     queue_put = mocker.patch("src.watchers.Queue.put")

@@ -15,6 +15,7 @@ import aioftp
 import aiofiles
 from aiofiles.os import wrap
 from aiohttp_retry import RetryClient, ExponentialRetry
+from aiohttp.client_exceptions import ClientError
 
 from src.api.models import LogEntry, ProtocolEnum, StatusEnum
 from .utils import PATH, get_protocol, FtpUrl
@@ -154,10 +155,7 @@ class HttpStorageProcessor(BaseStorageProcessor):
 
         filename, destination = await self.unprocessed.get()
 
-        retry_options = ExponentialRetry(attempts=3)
-        retry_client = RetryClient(raise_for_status=False, retry_options=retry_options)
-
-        async with aiohttp.MultipartWriter() as writer:
+        with aiohttp.MultipartWriter() as writer:
             try:
                 # FIXME: The content getter must depend on the file size,
                 #  we  must use _send_chunk for big files (State the definition of big)
@@ -168,12 +166,23 @@ class HttpStorageProcessor(BaseStorageProcessor):
                 await self._notify(filename, destination, StatusEnum.FAILED, reason)
                 return
 
-            async with retry_client.post(destination, data=writer) as response:
-                if response.ok:
-                    await self._notify(filename, destination, StatusEnum.SUCCEEDED)
-                else:
-                    reason = await response.text()
-                    reason = f"{response.status} {response.reason}\n\n{reason}"
+            async with RetryClient() as client:
+                try:
+                    async with client.post(destination, data=writer) as response:
+                        if response.ok:
+                            await self._notify(
+                                filename, destination, StatusEnum.SUCCEEDED
+                            )
+                        else:
+                            reason = await response.text()
+                            reason = f"{response.status} {response.reason}\n\n{reason}"
+                            self.logger.debug(reason)
+                            await self._notify(
+                                filename, destination, StatusEnum.FAILED, reason
+                            )
+                except ClientError as exp:
+                    self.logger.debug(exp)
+                    reason = " ".join(exp.args)
                     await self._notify(filename, destination, StatusEnum.FAILED, reason)
 
     # https://docs.aiohttp.org/en/stable/client_quickstart.html#streaming-uploads
