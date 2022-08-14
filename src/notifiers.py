@@ -6,15 +6,15 @@ from asyncio import Queue
 
 import mode
 
-from api.server import WebServer
+from src.api.server import WebServer
 
 
 class Notifier(mode.Service):
 
-    server: WebServer = WebServer()
+    server: WebServer = None
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.unprocessed = Queue()
 
     async def on_start(self) -> None:
@@ -23,6 +23,10 @@ class Notifier(mode.Service):
     async def acquire(self, payload, **kwargs):
         await self.unprocessed.put(payload)
 
+    @cached_property
+    def server(self):
+        return WebServer()
+
     @mode.Service.task
     async def _notify(self, **kwargs):
-        pass
+        ...

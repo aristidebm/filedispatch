@@ -8,7 +8,7 @@ __all__ = [
     "PATH",
 ]
 
-FtpUrl = stricturl(allowed_schemes=["ftp"])
+FtpUrl = stricturl(allowed_schemes=["ftp", "sftp"])
 FIELDS = dict(file=FileUrl, http=HttpUrl, ftp=FtpUrl)
 PATH = Union[str, Path]
 

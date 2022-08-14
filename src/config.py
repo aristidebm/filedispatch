@@ -2,7 +2,7 @@ import logging
 from typing import List, Union
 from pathlib import Path
 from pydantic import BaseModel, BaseSettings, DirectoryPath, constr
-from pydantic_yaml import YamlModelMixin, yaml
+from pydantic_yaml import YamlModelMixin
 from pydantic.error_wrappers import ValidationError
 
 logger = logging.getLogger(__name__)
@@ -10,7 +10,7 @@ logger.setLevel(logging.DEBUG)
 
 
 class FolderModel(BaseModel):
-    path: DirectoryPath
+    path: Path
     # https://en.wikipedia.org/wiki/List_of_filename_extensions
     extensions: List[constr(max_length=10)]
 

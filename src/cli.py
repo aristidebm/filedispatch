@@ -4,7 +4,7 @@ import logging
 import sys
 
 from .config import Config
-from .core import FileDispatch
+from .watchers import FileWatcher
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ def main():
         logger.error("The config file is malformed")
         return
 
-    dispatcher = FileDispatch(config)
+    dispatcher = FileWatcher(config)
     dispatcher.run()
 
 

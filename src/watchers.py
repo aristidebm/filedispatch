@@ -1,4 +1,4 @@
-import os.path
+import os
 import logging
 from typing import Union, Tuple
 from pathlib import Path
@@ -6,6 +6,8 @@ from asyncio import Queue
 
 import mode
 from watchfiles import awatch, Change
+import aiofiles
+
 
 from .processors import LocalStorageProcessor, FtpStorageProcessor, HttpStorageProcessor
 from .utils import get_protocol, PATH
@@ -22,7 +24,7 @@ class BaseWatcher(mode.Service):
 
     @classmethod
     def _register_processor(cls):
-        cls.PROCESSORS = dict(
+        cls.PROCESSORS_REGISTRY = dict(
             file=LocalStorageProcessor(),
             ftp=FtpStorageProcessor(),
             http=HttpStorageProcessor(),
@@ -30,13 +32,13 @@ class BaseWatcher(mode.Service):
 
 
 class FileWatcher(BaseWatcher):
-    def __init__(self, config: Settings):
-        super().__init__()
+    def __init__(self, config: Settings, **kwargs):
+        super().__init__(**kwargs)
         self.config = config
         self.unprocessed: Queue[Tuple[PATH, PATH]] = Queue()
 
     async def on_start(self) -> None:
-        for processor in self.PROCESSORS.values():
+        for processor in self.PROCESSORS_REGISTRY.values():
             await self.add_runtime_dependency(processor)
 
     async def on_started(self) -> None:
@@ -55,7 +57,7 @@ class FileWatcher(BaseWatcher):
                     continue
 
                 await self.unprocessed.put((filename, dest))
-                logger.debug(f"File {filename} is appended to be processed")
+                self.logger.debug(f"File {filename} is appended to be processed")
 
     @mode.Service.task
     async def _watch(self, config=None):
@@ -67,11 +69,15 @@ class FileWatcher(BaseWatcher):
                     continue
 
                 filename = change[1]
-                # Ignore files added in config.source subdirectories since watchfiles do recursive watch
+                # Ignore files added in the source subdirectories since watchfiles do recursive watch
                 # An issue is opened to fix that here https://github.com/samuelcolvin/watchfiles/issues/178
                 if os.path.basename(os.path.dirname(filename)) != os.path.basename(
                     config.source
                 ):
+                    continue
+
+                # Ignore directories and symlinks
+                if not await aiofiles.os.path.isfile(filename):
                     continue
 
                 dest = self._find_destination(filename, config=config)
@@ -80,7 +86,7 @@ class FileWatcher(BaseWatcher):
                     continue
 
                 await self.unprocessed.put((filename, dest))
-                logger.info(f"File {filename} is appended to be processed")
+                self.logger.info(f"File {filename} is appended to be processed")
 
     @mode.Service.task
     async def _provide(self):
@@ -91,8 +97,8 @@ class FileWatcher(BaseWatcher):
             self.unprocessed.task_done()
 
     def _get_processor(self, destination, **kwargs):
-        processor = self.PROCESSORS[get_protocol(destination)]
-        logger.info(f"{processor.fancy_name} is used to process {destination}")
+        processor = self.PROCESSORS_REGISTRY[get_protocol(destination)]
+        self.logger.info(f"{processor.fancy_name} is used to process {destination}")
         return processor
 
     def _find_destination(self, filename: PATH, config=None, mapping=None) -> PATH:
@@ -119,5 +125,5 @@ class FileWatcher(BaseWatcher):
             )
             worker.execute_from_commandline()
         except Exception as exp:
-            logger.exception(exp)
+            self.logger.exception(exp)
             return

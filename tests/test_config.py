@@ -1,21 +1,23 @@
 from tempfile import NamedTemporaryFile
 
 import pytest
+import pytest_asyncio
 from src.config import Config
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 def bad_configfile():
     data = """source: mnt/
 folders:
   - path: mnt/video
     extensions: [mp4, flv, avi, mov, wmv, webm, mkv]
-  - extensions: [mp3, wav, ogg] 
-  - path: mnt/document 
+  - path: http://localhost/documents/audio
+  - path: ftp://username:password@localhost/home/user/documents
     extensions: [pdf, djvu, tex, ps, doc, docx, ppt, pptx, xlsx, odt, epub]
-  - path: mnt/image
+  - path: file:///tmp/image
     extensions: [png, jpg, jpeg, gif, svg]
-    """
+        """
+
     config = NamedTemporaryFile(mode="w+", suffix=".yml")
     config.write(data)
     config.flush()  # Veru important, without this file will seems to be empty

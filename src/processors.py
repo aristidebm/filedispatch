@@ -16,19 +16,11 @@ import aiofiles
 from aiofiles.os import wrap
 from aiohttp_retry import RetryClient, ExponentialRetry
 
-from api.models import LogEntry, ProtocolEnum, StatusEnum
+from src.api.models import LogEntry, ProtocolEnum, StatusEnum
 from .utils import PATH, get_protocol, FtpUrl
 from .notifiers import Notifier
 
-
-@cached_property
-def notifier(self):
-    return Notifier()
-
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-async_move = wrap(shutil.move)
+copyfile = wrap(shutil.copyfile)
 
 
 # class RemoteStorageMixin:
@@ -53,28 +45,37 @@ async_move = wrap(shutil.move)
 # https://developer.mozilla.org/en-US/docs/Learn/Common_questions/Upload_files_to_a_web_server
 
 
-class BaseStorageProcessor(abc.ABC, mode.Service):
+class BaseStorageProcessor(mode.Service):
 
     fancy_name: str = "Base Processor"
     notifier: Notifier = None
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.unprocessed: Queue[Tuple[PATH, PATH]] = Queue()
 
     async def on_start(self) -> None:
         await self.add_runtime_dependency(self.notifier)
 
-    async def _notify(self, filename, destination, status, reason=None, **kwargs):
-        payload = self._get_payload(filename, destination, status, reason)
-        await self.notifier.acquire(payload)
+    async def _notify(
+        self, filename, destination, status, reason=None, delete=False, **kwargs
+    ):
+        try:
+            payload = await self._get_payload(filename, destination, status, reason)
+        except (error_wrappers.ValidationError, OSError) as exp:
+            self.logger.debug(exp)
+        else:
+            await self.notifier.acquire(payload)
+            if delete:
+                try:
+                    await aiofiles.os.unlink(filename)
+                except OSError as exp:
+                    self.logger.debug(exp)
 
     async def _get_payload(self, filename, destination, status, reason=None):
         async def get_filesize():
-
-            stat_object = await aiofiles.os.stat(filename)
             suffix = ["KB", "MB", "GB", "TB"]
-            quot = stat_object.st_size
+            quot = st_size = await aiofiles.os.path.getsize(filename)
             size = None
             idx = -1
 
@@ -88,16 +89,16 @@ class BaseStorageProcessor(abc.ABC, mode.Service):
             if size:
                 size = f"{size: .2f} {suffix[idx]}"
             else:
-                size = f"{stat_object.st_size // 1024: .2f} {suffix[0]}"
+                size = f"{st_size / 1024: .2f} {suffix[0]}"
 
             return size
 
-        basename = os.path.basename(filename)
-        extension = os.path.splitext(basename)[1]
+        extension = os.path.splitext(filename)[1].removeprefix(".")
 
         return LogEntry(
-            filename=basename,
-            destination=destination,
+            filename=os.path.basename(filename),
+            destination=str(destination),
+            source=os.path.dirname(filename),
             extension=extension,
             processor=self.fancy_name.upper(),
             protocol=ProtocolEnum[get_protocol(destination)],
@@ -130,12 +131,12 @@ class LocalStorageProcessor(BaseStorageProcessor):
         filename, destination = await self.unprocessed.get()
         try:
             basename = os.path.basename(filename)
-            await async_move(filename, os.path.join(destination, basename))
-            logger.info(f"File {filename} moved to {destination}")
-            await self._notify(filename, destination, StatusEnum.SUCCEEDED)
+            await copyfile(filename, os.path.join(destination, basename))
+            self.logger.info(f"File {filename} moved to {destination}")
+            await self._notify(filename, destination, StatusEnum.SUCCEEDED, delete=True)
 
         except OSError as exp:
-            logger.exception(exp)
+            self.logger.exception(exp)
             reason = " ".join(exp.args)
             await self._notify(filename, destination, StatusEnum.FAILED, reason)
 
@@ -162,7 +163,7 @@ class HttpStorageProcessor(BaseStorageProcessor):
                 #  we  must use _send_chunk for big files (State the definition of big)
                 writer.append(await aiofiles.open(filename, "rb"))
             except OSError as exp:
-                logger.exception(exp)
+                self.logger.exception(exp)
                 reason = " ".join(exp.args)
                 await self._notify(filename, destination, StatusEnum.FAILED, reason)
                 return
@@ -198,7 +199,7 @@ class FtpStorageProcessor(BaseStorageProcessor):
         try:
             scheme = parse_obj_as(FtpUrl, destination)
         except error_wrappers.ValidationError as exp:
-            logger.exception(exp)
+            self.logger.exception(exp)
             reason = exp.json()
             await self._notify(filename, destination, StatusEnum.FAILED, reason)
             return

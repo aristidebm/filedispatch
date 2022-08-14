@@ -17,6 +17,10 @@ pytest-aiohttp = "^1.0.4"
 aiofiles = "^0.8.0"
 cchardet = "^2.1.7"
 aiodns = "^3.0.0"
+PyPika = "^0.48.9"
+aiosqlite = "^0.17.0"
+aiohttp-pydantic = "^1.12.2"
+aiohttp-retry = "^2.8.3"
 
 [tool.poetry.dev-dependencies]
 black = "^22.6.0"

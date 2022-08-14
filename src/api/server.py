@@ -19,3 +19,44 @@
 # - By file extension
 # - By file name
 # - By used protocol
+
+import logging
+import mode
+from aiohttp import web
+from aiohttp_pydantic import oas
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+from .views import routes
+
+__version__ = "1.0.0"
+
+
+class WebServer(mode.Service):
+    host: str = "http://127.0.0.1:3002"
+
+    def __init__(self, host=None):
+        super().__init__()
+        self.host: str = host or self.host
+
+    async def on_started(self) -> None:
+        ...
+        # web.run_app(self.make_app(), host=self.host)
+
+    async def on_stop(self) -> None:
+        pass
+
+    @staticmethod
+    def make_app():
+        app = web.Application()
+        app.add_routes(routes)
+        # setup open api documentation as stated here (
+        # https://github.com/Maillol/aiohttp-pydantic#add-route-to-generate-open-api-specification-oas)
+        oas.setup(
+            app,
+            url_prefix=f"/api/v{__version__.split('.')[0]}/schema",
+            title_spec="File Dispatch Monitoring Api",
+            version_spec=__version__,
+        )
+        return app
