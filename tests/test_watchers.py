@@ -17,6 +17,8 @@ pytestmark = pytest.mark.watcher
 @pytest.mark.asyncio
 async def test_new_files_are_queued(mocker, config, filesystem):
     queue_put = mocker.patch("src.watchers.Queue.put")
+    # Mock the server to the prevent actual server launching when running tests
+    mocker.patch("src.api.server.WebServer.run_app")
 
     async with FileWatcher(config=config) as watcher:
         await asyncio.sleep(1)
@@ -34,6 +36,8 @@ async def test_new_files_are_queued(mocker, config, filesystem):
 @pytest.mark.asyncio
 async def test_existing_files_are_queued(mocker, config, filesystem):
     queue_put = mocker.patch("src.watchers.Queue.put")
+    # Mock the server to the prevent actual server launching when running tests
+    mocker.patch("src.api.server.WebServer.run_app")
 
     await asyncio.sleep(1)
 
@@ -51,6 +55,8 @@ async def test_existing_files_are_queued(mocker, config, filesystem):
 async def test_ignore_new_directories_and_symlinks(mocker, config, filesystem):
 
     queue_put = mocker.patch("src.watchers.Queue.put")
+    # Mock the server to the prevent actual server launching when running tests
+    mocker.patch("src.api.server.WebServer.run_app")
 
     async with FileWatcher(config=config) as watcher:
         await asyncio.sleep(1)
@@ -69,6 +75,8 @@ async def test_ignore_new_directories_and_symlinks(mocker, config, filesystem):
 async def test_ignore_source_subdirectories_changes(mocker, config, filesystem):
 
     queue_put = mocker.patch("src.watchers.Queue.put")
+    # Mock the server to the prevent actual server launching when running tests
+    mocker.patch("src.api.server.WebServer.run_app")
 
     async with FileWatcher(config=config) as watcher:
         await asyncio.sleep(1)

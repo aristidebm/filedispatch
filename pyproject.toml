@@ -5,10 +5,9 @@ description = ""
 authors = ["Aristide <aristide.bamazi@imsp-uac.org>"]
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = "^3.9"
 pydantic-yaml = "^0.8.0"
 pytest-mock = "^3.8.2"
-mode = { git = "https://github.com/aristidebm/mode.git" }
 # The depencicies is pinned to v0.15 because of this https://github.com/samuelcolvin/watchfiles/issues/177
 watchfiles = "0.15"
 aioftp = "^0.21.3"
@@ -21,6 +20,7 @@ PyPika = "^0.48.9"
 aiosqlite = "^0.17.0"
 aiohttp-pydantic = "^1.12.2"
 aiohttp-retry = "^2.8.3"
+mode = "^4.4.0"
 nest-asyncio = "^1.5.5"
 
 [tool.poetry.dev-dependencies]

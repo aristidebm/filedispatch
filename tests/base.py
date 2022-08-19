@@ -34,7 +34,7 @@ def make_app(routes=None):
         return web.Response(body=b"running ...")
 
     routes = routes or []
-    routes = routes + [RouteDef(method="GET", path="/", handler=healfcheck, **{})]
+    routes = routes + [RouteDef(method="GET", path="/", handler=healfcheck, kwargs={})]
     app = web.Application()
     app.router.add_routes(routes)
     return app

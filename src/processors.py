@@ -5,7 +5,6 @@ from asyncio import Queue
 import abc
 import os
 import shutil
-import logging
 
 from pydantic import parse_obj_as, error_wrappers
 
