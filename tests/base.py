@@ -28,13 +28,25 @@ async def hello(request):
     return web.Response(body=b"Hello, world")
 
 
-def make_app(routes=None):
-    # routes
-    async def healfcheck(request):
-        return web.Response(body=b"running ...")
+# def make_app(routes=None):
+#     # https://docs.aiohttp.org/en/stable/testing.html?highlight=tests#testing-aiohttp-web-servers
+#     # routes
+#
+#     async def healfcheck(request):
+#         return web.Response(body=b"running ...")
 
-    routes = routes or []
-    routes = routes + [RouteDef(method="GET", path="/", handler=healfcheck, kwargs={})]
-    app = web.Application()
-    app.router.add_routes(routes)
-    return app
+# async def receive_audio(request):
+#     content = await request.content.read()
+#     print(content)
+#     return web.Response(body=f"Successfully added to {request.path}")
+#
+# routes = routes or []
+# routes = routes + [
+#     RouteDef(method="GET", path="/", handler=healfcheck, kwargs={}),
+#     RouteDef(
+#         method="POST", path="/documents/audio", handler=receive_audio, kwargs={}
+#     ),
+# ]
+# app = web.Application()
+# app.router.add_routes(routes)
+# return app

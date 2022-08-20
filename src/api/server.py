@@ -25,10 +25,6 @@ import mode
 from aiohttp import web
 from aiohttp_pydantic import oas
 
-import nest_asyncio
-
-# nest_asyncio.apply()
-
 from .views import routes
 
 __version__ = "0.1.0"
@@ -39,9 +35,8 @@ class WebServer(mode.Service):
     port: int = 8080
     runner = None
 
-    def __init__(self, host=None, port=None):
-        super().__init__()
-        self.host: str = host or self.host
+    def __init__(self, port=None, **kwargs):
+        super().__init__(**kwargs)
         self.port: int = port or self.port
 
     async def on_started(self) -> None:
@@ -50,12 +45,14 @@ class WebServer(mode.Service):
         # generate a Runtime error, loop already running, so we must declare our own asynchronous app runner.
         # https://github.com/aio-libs/aiohttp/blob/master/aiohttp/web.py#L447
         # https://github.com/aio-libs/aiohttp/issues/2608
+        await super().on_started()
         self.logger.info("web server is starting ...")
         await self.run_app()
 
     async def on_stop(self) -> None:
         self.logger.info("web server is shutting down ...")
         await self.runner.cleanup()
+        await super().on_stop()
 
     def _make_app(self):
         app = web.Application()

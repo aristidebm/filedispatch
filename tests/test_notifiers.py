@@ -10,9 +10,9 @@ from .base import create_file, contains
 pytestmark = pytest.mark.notif
 
 
-@pytest.mark.skip("fail for non determinated error yet")
+# @pytest.mark.skip("fail for non determinate error yet")
 @pytest.mark.asyncio
-async def test_local_storage_processor_process_the_file(mocker, config, filesystem):
+async def test_notifier_acquire_the_file(mocker, config, filesystem):
     # Mock the server to the prevent actual server launching when running tests
     mocker.patch("src.api.server.WebServer.run_app")
 

@@ -1,6 +1,7 @@
 import os
 import logging
-from typing import Union, Tuple
+import functools
+from typing import Tuple
 from pathlib import Path
 from asyncio import Queue
 
@@ -8,7 +9,7 @@ import mode
 from watchfiles import awatch, Change
 import aiofiles
 
-
+from src.api.server import WebServer
 from .processors import LocalStorageProcessor, FtpStorageProcessor, HttpStorageProcessor
 from .utils import get_protocol, PATH
 from .config import Settings
@@ -32,14 +33,33 @@ class BaseWatcher(mode.Service):
 
 
 class FileWatcher(BaseWatcher):
+
+    server: WebServer = None
+
     def __init__(self, config: Settings, **kwargs):
+        self._port = kwargs.pop("port", None)
         super().__init__(**kwargs)
         self.config = config
         self.unprocessed: Queue[Tuple[PATH, PATH]] = Queue()
 
     async def on_start(self) -> None:
+        # The server will be closed automatically when FileWatcher is suspended
+        # since the server is a runtime dependency
+        await self.add_runtime_dependency(self.server)
+
+    async def on_stop(self) -> None:
+        # stop processor
         for processor in self.PROCESSORS_REGISTRY.values():
-            await self.add_runtime_dependency(processor)
+            logger.info(f"Stopping [{processor.fancy_name.lower()}] ...")
+            await processor.stop()
+        await super().on_stop()
+
+    def on_init_dependencies(self):
+        super().on_init_dependencies()
+        # update the loop.
+        for process in self.PROCESSORS_REGISTRY.values():
+            process.loop = self.loop
+        return self.PROCESSORS_REGISTRY.values()
 
     async def on_started(self) -> None:
         await super().on_started()
@@ -58,6 +78,10 @@ class FileWatcher(BaseWatcher):
 
                 await self.unprocessed.put((filename, dest))
                 self.logger.debug(f"File {filename} is appended to be processed")
+
+    @functools.cached_property
+    def server(self):
+        return WebServer(port=self._port)
 
     @mode.Service.task
     async def _watch(self, config=None):
@@ -90,9 +114,12 @@ class FileWatcher(BaseWatcher):
 
     @mode.Service.task
     async def _provide(self):
-        while True:
+        while not self.should_stop:
+            await self.sleep(1.0)
             filename, destination = await self.unprocessed.get()
             processor = self._get_processor(destination)
+            # start the processor if not yet started.
+            await processor.maybe_start()
             await processor.acquire(filename, destination)
             self.unprocessed.task_done()
 

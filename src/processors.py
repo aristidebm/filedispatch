@@ -54,18 +54,27 @@ class BaseStorageProcessor(mode.Service):
         super().__init__(**kwargs)
         self.unprocessed: Queue[Tuple[PATH, PATH]] = Queue()
 
-    async def on_start(self) -> None:
-        await self.add_runtime_dependency(self.notifier)
+    def __post_init__(self):
+        self.add_dependency(self.notifier)
+
+    async def on_stop(self) -> None:
+        self.logger.info("Stopping the notifier ...")
+        await self.notifier.stop()
+        await super().on_stop()
 
     async def _notify(
         self, filename, destination, status, reason=None, delete=False, **kwargs
     ):
+
         try:
             payload = await self._get_payload(filename, destination, status, reason)
         except (error_wrappers.ValidationError, OSError) as exp:
             self.logger.debug(exp)
         else:
+            # start notifier on demand
+            await self.notifier.maybe_start()
             await self.notifier.acquire(payload)
+
             if delete:
                 try:
                     await aiofiles.os.unlink(filename)
@@ -125,6 +134,7 @@ class LocalStorageProcessor(BaseStorageProcessor):
 
     @mode.Service.task
     async def _process(self, **kwargs):
+        await self.sleep(1.0)
         await self._move()
 
     async def _move(self, **kwargs):
@@ -137,7 +147,7 @@ class LocalStorageProcessor(BaseStorageProcessor):
 
         except OSError as exp:
             self.logger.exception(exp)
-            reason = " ".join(exp.args)
+            reason = " ".join([str(arg) for arg in exp.args])
             await self._notify(filename, destination, StatusEnum.FAILED, reason)
 
 
@@ -147,7 +157,9 @@ class HttpStorageProcessor(BaseStorageProcessor):
 
     @mode.Service.task
     async def _process(self, **kwargs):
-        await self._send(**kwargs)
+        while not self.should_stop:
+            await self.sleep(1.0)
+            await self._send(**kwargs)
 
     async def _send(self, **kwargs):
         # https://docs.aiohttp.org/en/stable/multipart.html#sending-multipart-requests
@@ -161,7 +173,7 @@ class HttpStorageProcessor(BaseStorageProcessor):
                 writer.append(await aiofiles.open(filename, "rb"))
             except OSError as exp:
                 self.logger.exception(exp)
-                reason = " ".join(exp.args)
+                reason = " ".join([str(arg) for arg in exp.args])
                 await self._notify(filename, destination, StatusEnum.FAILED, reason)
                 return
 
@@ -199,7 +211,9 @@ class FtpStorageProcessor(BaseStorageProcessor):
 
     @mode.Service.task
     async def _process(self, **kwargs):
-        await self._send(**kwargs)
+        while not self.should_stop:
+            await self.sleep(1.0)
+            await self._send(**kwargs)
 
     async def _send(self, **kwargs):
         filename, destination = await self.unprocessed.get()
