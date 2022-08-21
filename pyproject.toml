@@ -5,7 +5,7 @@ description = ""
 authors = ["Aristide <aristide.bamazi@imsp-uac.org>"]
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.10"
 pydantic-yaml = "^0.8.0"
 pytest-mock = "^3.8.2"
 # The depencicies is pinned to v0.15 because of this https://github.com/samuelcolvin/watchfiles/issues/177
@@ -20,7 +20,7 @@ PyPika = "^0.48.9"
 aiosqlite = "^0.17.0"
 aiohttp-pydantic = "^1.12.2"
 aiohttp-retry = "^2.8.3"
-mode = "^4.4.0"
+mode-ng = "^0.4.0"
 
 [tool.poetry.dev-dependencies]
 black = "^22.6.0"

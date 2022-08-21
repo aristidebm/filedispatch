@@ -30,8 +30,6 @@ to some configured destination.
 
 ## Tests
 
-## kowns Issues
-+ Users that use python 3.10 can have little issues with **mode**, module since in release 10, the python removes the possibility ot pass **loop** kwargs to **wait** and **wait_for** in **asyncio** module. I have made
-little changes on the module to [fix](https://github.com/aristidebm/mode) the problem, it can help but It is not tested. 
+## Known Issues
 
 ## Licence
