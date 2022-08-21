@@ -11,7 +11,7 @@ to some configured destination.
 ## Features
 
 + Support Local file moving
-+ Support Http raw file upload (upload file in request body)
++ Support Http chunck binary stream file upload
 + Support Ftp file upload 
 + Provide a monitoring Api
 + Well tested project
