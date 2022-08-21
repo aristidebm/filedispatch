@@ -1,3 +1,4 @@
+import asyncio
 import math
 from typing import Tuple, Optional
 from functools import wraps, cached_property
@@ -80,7 +81,7 @@ class BaseStorageProcessor(mode.Service):
         else:
             # start notifier on demand
             await self.notifier.maybe_start()
-            await self.notifier.acquire(payload)
+            self.notifier.acquire(payload)
             if delete:
                 try:
                     await aiofiles.os.unlink(filename)
@@ -130,8 +131,8 @@ class BaseStorageProcessor(mode.Service):
     async def _process(self, **kwargs):
         pass
 
-    async def acquire(self, filename: PATH, destination: PATH, **kwargs) -> None:
-        await self.unprocessed.put((filename, destination))
+    def acquire(self, filename: PATH, destination: PATH, **kwargs) -> None:
+        asyncio.create_task(self.unprocessed.put((filename, destination)))
 
 
 class LocalStorageProcessor(BaseStorageProcessor):

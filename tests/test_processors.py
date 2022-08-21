@@ -35,7 +35,7 @@ class TestLocalStorageProcessor:
             await asyncio.sleep(1)
 
             # Make sure the file is added to the processing queue
-            acquire.assert_awaited_once()
+            acquire.assert_called_once()
 
     # @pytest.mark.skip("fail for non determinated error yet")
     @pytest.mark.asyncio
@@ -150,7 +150,7 @@ class TestHttpStorageProcessor:
             await asyncio.sleep(1)
 
             # Make sure the file is added to the processing queue
-            acquire.assert_awaited_once()
+            acquire.assert_called_once()
 
     @pytest.mark.asyncio
     @pytest.mark.process

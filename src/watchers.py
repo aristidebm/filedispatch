@@ -1,3 +1,4 @@
+import asyncio
 import os
 import logging
 import functools
@@ -109,7 +110,8 @@ class FileWatcher(BaseWatcher):
                 if not dest:
                     continue
 
-                await self.unprocessed.put((filename, dest))
+                # we don't need this to be completed before we continue, so we don't need to block uselessly.
+                asyncio.create_task(self.unprocessed.put((filename, dest)))
                 self.logger.info(f"File {filename} is appended to be processed")
 
     @mode.Service.task
@@ -120,7 +122,7 @@ class FileWatcher(BaseWatcher):
             processor = self._get_processor(destination)
             # start the processor if not yet started.
             await processor.maybe_start()
-            await processor.acquire(filename, destination)
+            processor.acquire(filename, destination)
             self.unprocessed.task_done()
 
     def _get_processor(self, destination, **kwargs):
