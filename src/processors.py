@@ -42,7 +42,10 @@ copyfile = wrap(shutil.copyfile)
 
 # Resources
 # https://phil.tech/2016/http-rest-api-file-uploads/
-# https://developer.mozilla.org/en-US/docs/Learn/Common_questions/Upload_files_to_a_web_server
+# https://developer.mozilla.org/en-US/docs/Learn/Common_questions/Upload_files_to_a_web_serverNever
+# Never Initial asyncio Queues outside of the running event loop, other they will loop.get_event_loop and create
+# a new loop, it can save you for long time debuging (https://stackoverflow.com/a/53724990/13837279). I have intialized
+# Queues inside the __intit__ method with is not async method and it take me long google search to figure it out.
 
 
 class BaseStorageProcessor(mode.Service):
@@ -52,10 +55,14 @@ class BaseStorageProcessor(mode.Service):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.unprocessed: Queue[Tuple[PATH, PATH]] = Queue()
 
     def __post_init__(self):
         self.add_dependency(self.notifier)
+
+    async def on_start(self) -> None:
+        # define before background task start since the use Queues
+        # for the matter of safety https://mode.readthedocs.io/en/latest/userguide/services.html#ordering
+        self.unprocessed: Queue[Tuple[PATH, PATH]] = Queue()
 
     async def on_stop(self) -> None:
         self.logger.info("Stopping the notifier ...")
@@ -74,7 +81,6 @@ class BaseStorageProcessor(mode.Service):
             # start notifier on demand
             await self.notifier.maybe_start()
             await self.notifier.acquire(payload)
-
             if delete:
                 try:
                     await aiofiles.os.unlink(filename)
@@ -158,8 +164,8 @@ class HttpStorageProcessor(BaseStorageProcessor):
     @mode.Service.task
     async def _process(self, **kwargs):
         while not self.should_stop:
-            await self.sleep(1.0)
             await self._send(**kwargs)
+            await self.sleep(1.0)
 
     async def _send(self, **kwargs):
         # https://docs.aiohttp.org/en/stable/multipart.html#sending-multipart-requests
@@ -176,7 +182,7 @@ class HttpStorageProcessor(BaseStorageProcessor):
                 reason = " ".join([str(arg) for arg in exp.args])
                 await self._notify(filename, destination, StatusEnum.FAILED, reason)
                 return
-
+            # keep default aiohttp_retry settings.
             async with RetryClient() as client:
                 try:
                     async with client.post(destination, data=writer) as response:
@@ -193,7 +199,9 @@ class HttpStorageProcessor(BaseStorageProcessor):
                             )
                 except ClientError as exp:
                     self.logger.debug(exp)
-                    reason = " ".join(exp.args)
+                    # FIXME: args can be empty. What if we send all the exception to the notification api like so
+                    #  f"{exp!r}" ?
+                    reason = " ".join([str(arg) for arg in exp.args])
                     await self._notify(filename, destination, StatusEnum.FAILED, reason)
 
     # https://docs.aiohttp.org/en/stable/client_quickstart.html#streaming-uploads

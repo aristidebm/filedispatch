@@ -25,9 +25,15 @@ def get_protocol(url: str) -> str:
     return "file"
 
 
-def clean_url(url: str) -> str:
+def clean_url(url: PATH) -> PATH:
     # Pydantic regexp consider http://localhost:8080 as an invalid http url
-    if url.startswith("http") or url.startswith("ftp") or url.startswith("sftp"):
-        return url.replace("localhost", "127.0.0.1")
+    str_url = str(url)
 
-    return url
+    if (
+        str_url.startswith("http")
+        or str_url.startswith("ftp")
+        or str_url.startswith("sftp")
+    ):
+        str_url = url.replace("localhost", "127.0.0.1")
+
+    return Path(str_url) if isinstance(url, Path) else str_url
