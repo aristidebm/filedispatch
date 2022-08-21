@@ -18,5 +18,6 @@ class Notifier(mode.Service):
 
     @mode.Service.task
     async def _notify(self, **kwargs):
-        # TODO: How To fetch
+        # TODO: Seperate Queue consumption from processisng, so that we can use asyncio.create_task to schedule
+        #  tasks for execution instead waiting them to be completed before mooving.
         ...

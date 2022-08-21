@@ -141,8 +141,8 @@ class LocalStorageProcessor(BaseStorageProcessor):
 
     @mode.Service.task
     async def _process(self, **kwargs):
+        asyncio.create_task(self._move())
         await self.sleep(1.0)
-        await self._move()
 
     async def _move(self, **kwargs):
         filename, destination = await self.unprocessed.get()
@@ -150,12 +150,16 @@ class LocalStorageProcessor(BaseStorageProcessor):
             basename = os.path.basename(filename)
             await copyfile(filename, os.path.join(destination, basename))
             self.logger.info(f"File {filename} moved to {destination}")
-            await self._notify(filename, destination, StatusEnum.SUCCEEDED, delete=True)
+            asyncio.create_task(
+                self._notify(filename, destination, StatusEnum.SUCCEEDED, delete=True)
+            )
 
         except OSError as exp:
             self.logger.exception(exp)
             reason = " ".join([str(arg) for arg in exp.args])
-            await self._notify(filename, destination, StatusEnum.FAILED, reason)
+            asyncio.create_task(
+                self._notify(filename, destination, StatusEnum.FAILED, reason)
+            )
 
 
 class HttpStorageProcessor(BaseStorageProcessor):
@@ -165,7 +169,7 @@ class HttpStorageProcessor(BaseStorageProcessor):
     @mode.Service.task
     async def _process(self, **kwargs):
         while not self.should_stop:
-            await self._send(**kwargs)
+            asyncio.create_task(self._send(**kwargs))
             await self.sleep(1.0)
 
     async def _send(self, **kwargs):
@@ -221,8 +225,8 @@ class FtpStorageProcessor(BaseStorageProcessor):
     @mode.Service.task
     async def _process(self, **kwargs):
         while not self.should_stop:
+            asyncio.create_task(self._send(**kwargs))
             await self.sleep(1.0)
-            await self._send(**kwargs)
 
     async def _send(self, **kwargs):
         filename, destination = await self.unprocessed.get()
