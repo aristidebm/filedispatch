@@ -4,12 +4,11 @@ import pytest
 import os
 from pathlib import Path
 
-import responses
 
 from src.watchers import FileWatcher
 from src.api.models import StatusEnum, LogEntry
 
-from .base import create_file, contains
+from .base import contains, make_app
 
 
 pytestmark = pytest.mark.process
@@ -18,7 +17,7 @@ pytestmark = pytest.mark.process
 class TestLocalStorageProcessor:
     @pytest.mark.asyncio
     async def test_local_storage_processor_acquire_the_file(
-        self, mocker, config, filesystem
+        self, mocker, config, filesystem, new_file
     ):
         acquire = mocker.patch("src.processors.LocalStorageProcessor.acquire")
         # Mock the server to the prevent actual server launching when running tests
@@ -28,18 +27,20 @@ class TestLocalStorageProcessor:
             await asyncio.sleep(1)
 
             assert watcher.unprocessed.empty()
-            filename = create_file(filesystem, ext="mp4")
-            assert contains(Path(filesystem.name) / "mnt", filename.name)
+
+            dir_ = Path(filesystem.name) / "mnt"
+            filename = new_file(dir_, suffix="mp4")
+            assert contains(dir_, filename.name)
 
             await asyncio.sleep(1)
 
             # Make sure the file is added to the processing queue
             acquire.assert_awaited_once()
 
-    @pytest.mark.skip("fail for non determinated error yet")
+    # @pytest.mark.skip("fail for non determinated error yet")
     @pytest.mark.asyncio
-    async def test_local_storage_processor_permissionrspss_failure(
-        self, mocker, config, filesystem
+    async def test_local_storage_processor_permissions_failure(
+        self, mocker, config, filesystem, new_file
     ):
         logger = mocker.patch("src.processors.LocalStorageProcessor.logger.exception")
         # Mock the server to the prevent actual server launching when running tests
@@ -50,10 +51,14 @@ class TestLocalStorageProcessor:
 
             assert watcher.unprocessed.empty()
             mode = 0o000
+            dir_ = Path(filesystem.name) / "mnt"
+
             assert stat.filemode(mode) == "?---------"
-            os.chmod(Path(filesystem.name) / "mnt" / "video", mode)
-            filename = create_file(filesystem, ext="mp4")
-            assert contains(Path(filesystem.name) / "mnt", filename.name)
+            os.chmod(dir_ / "video", mode)
+
+            filename = new_file(dir_, suffix="mp4")
+            assert contains(dir_, filename.name)
+
             await asyncio.sleep(1)
 
             # Make sure the file is added to the processing queue
@@ -61,7 +66,7 @@ class TestLocalStorageProcessor:
 
     @pytest.mark.asyncio
     async def test_local_storage_processor_process_the_file(
-        self, mocker, config, filesystem
+        self, mocker, config, filesystem, new_file
     ):
         move = mocker.patch("src.processors.LocalStorageProcessor._move")
         # Mock the server to the prevent actual server launching when running tests
@@ -71,18 +76,20 @@ class TestLocalStorageProcessor:
             await asyncio.sleep(1)
 
             assert watcher.unprocessed.empty()
-            filename = create_file(filesystem, ext="mp4")
-            assert contains(Path(filesystem.name) / "mnt", filename.name)
+
+            dir_ = Path(filesystem.name) / "mnt"
+            filename = new_file(dir_, suffix="mp4")
+            assert contains(dir_, filename.name)
 
             await asyncio.sleep(1)
 
             # Make sure the file is added to the processing queue
             move.assert_awaited_once()
 
-    @pytest.mark.skip("fail in test suite but not when executed alone")
+    # @pytest.mark.skip("fail in test suite but not when executed alone")
     @pytest.mark.asyncio
     async def test_local_storage_processor_generated_payload(
-        self, mocker, config, filesystem
+        self, mocker, config, filesystem, new_file
     ):
 
         notify = mocker.patch("src.processors.LocalStorageProcessor._notify")
@@ -93,10 +100,11 @@ class TestLocalStorageProcessor:
             await asyncio.sleep(1)
 
             assert watcher.unprocessed.empty()
-            filename = create_file(filesystem, ext="mp4")
-            source = Path(filesystem.name) / "mnt"
-            video = source / "video"
-            assert contains(source, filename.name)
+
+            dir_ = Path(filesystem.name) / "mnt"
+            video = dir_ / "video"
+            filename = new_file(dir_, suffix="mp4")
+            assert contains(dir_, filename.name)
 
             await asyncio.sleep(1)
 
@@ -121,11 +129,10 @@ class TestLocalStorageProcessor:
             # FIXME: Test the generated logs in case of failure.
 
 
-#
 class TestHttpStorageProcessor:
     @pytest.mark.asyncio
     async def test_http_storage_processor_acquire_the_file(
-        self, mocker, config, filesystem
+        self, mocker, config, filesystem, new_file
     ):
         acquire = mocker.patch("src.processors.HttpStorageProcessor.acquire")
         # Mock the server to the prevent actual server launching when running tests
@@ -135,8 +142,10 @@ class TestHttpStorageProcessor:
             await asyncio.sleep(1)
 
             assert watcher.unprocessed.empty()
-            filename = create_file(filesystem, ext="mp3")
-            assert contains(Path(filesystem.name) / "mnt", filename.name)
+
+            dir_ = Path(filesystem.name) / "mnt"
+            filename = new_file(dir_, suffix="mp3")
+            assert contains(dir_, filename.name)
 
             await asyncio.sleep(1)
 
@@ -146,52 +155,51 @@ class TestHttpStorageProcessor:
     @pytest.mark.asyncio
     @pytest.mark.process
     async def test_http_storage_processor_server_down_failure(
-        self, mocker, config, filesystem
+        self, mocker, config, filesystem, new_file, aiohttp_server
     ):
-        logger = mocker.patch("src.processors.HttpStorageProcessor.logger.debug")
         # Mock the server to the prevent actual server launching when running tests
         mocker.patch("src.api.server.WebServer.run_app")
-        async with FileWatcher(config=config) as watcher:
+
+        debug = mocker.patch("src.processors.HttpStorageProcessor.logger.debug")
+        PORT = 8000
+
+        await aiohttp_server(make_app(status=500), port=PORT)
+
+        async with FileWatcher(config=config, port=PORT) as watcher:
+
             await asyncio.sleep(1)
 
-            with responses.RequestsMock() as rs:
-                rs.add(
-                    responses.POST,
-                    "http://127.0.0.1:8000/documents/audio",
-                    body=b"",
-                    status=500,
-                )
-                assert watcher.unprocessed.empty()
-                filename = create_file(filesystem, ext="mp3")
-                # assert contains(Path(filesystem.name) / "mnt", filename.name)
-                await asyncio.sleep(1)
-                rs.assert_call_count("http://127.0.0.1:8000/documents/audio", 3)
+            assert watcher.unprocessed.empty()
 
-            # Make sure the file is added to the processing queue
-            logger.assert_called_once()
+            dir_ = Path(filesystem.name) / "mnt"
+            filename = new_file(dir_, suffix="mp3")
+            assert contains(dir_, filename.name)
+
+            await asyncio.sleep(1)
+
+            debug.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_http_storage_process_the_file(
-        self, mocker, config, filesystem, aiohttp_server
+        self, mocker, config, filesystem, new_file, aiohttp_server
     ):
         # Mock the server to the prevent actual server launching when running tests
         mocker.patch("src.api.server.WebServer.run_app")
 
+        debug = mocker.patch("src.processors.HttpStorageProcessor.logger.debug")
+
         PORT = 8000
-        URL = f"http://127.0.0.1:{PORT}/documents/audio"
+        await aiohttp_server(make_app(), port=PORT)
 
         async with FileWatcher(config, port=PORT) as watcher:
             await asyncio.sleep(1)
 
-            with responses.RequestsMock() as rs:
-                rs.add(
-                    responses.POST,
-                    URL,
-                    body="Successfully uploaded",
-                    status=200,
-                )
+            assert watcher.unprocessed.empty()
 
-                assert watcher.unprocessed.empty()
-                filename = create_file(filesystem, ext="mp3")
-                # assert contains(Path(filesystem.name) / "mnt", filename.name)
-                rs.assert_call_count(URL, 1)
+            dir_ = Path(filesystem.name) / "mnt"
+            filename = new_file(dir_, suffix="mp3")
+            assert contains(dir_, filename.name)
+
+            await asyncio.sleep(1)
+
+            debug.assert_not_called()

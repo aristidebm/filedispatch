@@ -13,16 +13,8 @@ repos:
           (?x)^(
             tests/base.py| 
           )$
+        args: [--django]
   - repo: https://github.com/psf/black
     rev: 22.3.0
     hooks:
       - id: black
-  - repo: local
-    hooks:
-      - id: pre-commit-django-migrations
-        name: Check django migrations
-        entry: make check_migrations
-        language: system
-        types:
-          - python
-        pass_filenames: false

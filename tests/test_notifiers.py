@@ -4,7 +4,7 @@ from pathlib import Path
 
 from src.watchers import FileWatcher
 
-from .base import create_file, contains
+from .base import contains
 
 
 pytestmark = pytest.mark.notif
@@ -12,7 +12,7 @@ pytestmark = pytest.mark.notif
 
 # @pytest.mark.skip("fail for non determinate error yet")
 @pytest.mark.asyncio
-async def test_notifier_acquire_the_file(mocker, config, filesystem):
+async def test_notifier_acquire_the_file(mocker, config, filesystem, new_file):
     # Mock the server to the prevent actual server launching when running tests
     mocker.patch("src.api.server.WebServer.run_app")
 
@@ -22,8 +22,10 @@ async def test_notifier_acquire_the_file(mocker, config, filesystem):
         await asyncio.sleep(1)
 
         assert watcher.unprocessed.empty()
-        filename = create_file(filesystem, ext="mp4")
-        assert contains(Path(filesystem.name) / "mnt", filename.name)
+
+        dir_ = Path(filesystem.name) / "mnt"
+        filename = new_file(dir_, suffix="mp3")
+        assert contains(dir_, filename.name)
 
         await asyncio.sleep(1)
 

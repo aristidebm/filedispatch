@@ -177,14 +177,6 @@ optional = false
 python-versions = "*"
 
 [[package]]
-name = "certifi"
-version = "2022.6.15"
-description = "Python package for providing Mozilla's CA Bundle."
-category = "dev"
-optional = false
-python-versions = ">=3.6"
-
-[[package]]
 name = "cffi"
 version = "1.15.1"
 description = "Foreign Function Interface for Python calling C code."
@@ -633,39 +625,6 @@ optional = false
 python-versions = ">=3.6"
 
 [[package]]
-name = "requests"
-version = "2.28.1"
-description = "Python HTTP for Humans."
-category = "dev"
-optional = false
-python-versions = ">=3.7, <4"
-
-[package.dependencies]
-certifi = ">=2017.4.17"
-charset-normalizer = ">=2,<3"
-idna = ">=2.5,<4"
-urllib3 = ">=1.21.1,<1.27"
-
-[package.extras]
-socks = ["PySocks (>=1.5.6,!=1.5.7)"]
-use_chardet_on_py3 = ["chardet (>=3.0.2,<6)"]
-
-[[package]]
-name = "responses"
-version = "0.21.0"
-description = "A utility library for mocking out the `requests` Python library."
-category = "dev"
-optional = false
-python-versions = ">=3.7"
-
-[package.dependencies]
-requests = ">=2.0,<3.0"
-urllib3 = ">=1.25.10"
-
-[package.extras]
-tests = ["pytest (>=7.0.0)", "coverage (>=6.0.0)", "pytest-cov", "pytest-asyncio", "pytest-localserver", "flake8", "types-mock", "types-requests", "mypy"]
-
-[[package]]
 name = "semver"
 version = "2.13.0"
 description = "Python helper for Semantic Versioning (http://semver.org/)"
@@ -725,19 +684,6 @@ optional = false
 python-versions = ">=3.7"
 
 [[package]]
-name = "urllib3"
-version = "1.26.11"
-description = "HTTP library with thread-safe connection pooling, file post, and more."
-category = "dev"
-optional = false
-python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, !=3.5.*, <4"
-
-[package.extras]
-brotli = ["brotlicffi (>=0.8.0)", "brotli (>=1.0.9)", "brotlipy (>=0.6.0)"]
-secure = ["pyOpenSSL (>=0.14)", "cryptography (>=1.3.4)", "idna (>=2.0.0)", "certifi", "ipaddress"]
-socks = ["PySocks (>=1.5.6,!=1.5.7,<2.0)"]
-
-[[package]]
 name = "virtualenv"
 version = "20.16.3"
 description = "Virtual Python Environment builder"
@@ -788,7 +734,7 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "4afb65fca95cd9f451afd1592cf9ac5651169141c19d15576aebbb909c43612a"
+content-hash = "56a143d2231956655958bb79e5f4ff18271b6ec87f3b6da6bec5cfc77e8aabcb"
 
 [metadata.files]
 aiodns = []
@@ -835,10 +781,6 @@ black = [
     {file = "black-22.6.0.tar.gz", hash = "sha256:6c6d39e28aed379aec40da1c65434c77d75e65bb59a1e1c283de545fb4e7c6c9"},
 ]
 cchardet = []
-certifi = [
-    {file = "certifi-2022.6.15-py3-none-any.whl", hash = "sha256:fe86415d55e84719d75f8b69414f6438ac3547d2078ab91b67e779ef69378412"},
-    {file = "certifi-2022.6.15.tar.gz", hash = "sha256:84c85a9078b11105f04f3036a9482ae10e4621616db313fe045dd24743a0820d"},
-]
 cffi = []
 cfgv = []
 charset-normalizer = []
@@ -912,8 +854,6 @@ pytest-aiohttp = []
 pytest-asyncio = []
 pytest-mock = []
 pyyaml = []
-requests = []
-responses = []
 semver = []
 sniffio = [
     {file = "sniffio-1.2.0-py3-none-any.whl", hash = "sha256:471b71698eac1c2112a40ce2752bb2f4a4814c22a54a3eed3676bc0f5ca9f663"},
@@ -927,7 +867,6 @@ tomli = [
 ]
 types-deprecated = []
 typing-extensions = []
-urllib3 = []
 virtualenv = []
 watchfiles = []
 wrapt = []

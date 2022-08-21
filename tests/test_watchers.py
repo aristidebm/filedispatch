@@ -9,13 +9,13 @@ import pytest
 from src.watchers import FileWatcher
 
 
-from .base import create_file, contains
+from .base import contains
 
 pytestmark = pytest.mark.watcher
 
 
 @pytest.mark.asyncio
-async def test_new_files_are_queued(mocker, config, filesystem):
+async def test_new_files_are_queued(mocker, config, filesystem, new_file):
     queue_put = mocker.patch("src.watchers.Queue.put")
     # Mock the server to the prevent actual server launching when running tests
     mocker.patch("src.api.server.WebServer.run_app")
@@ -24,8 +24,9 @@ async def test_new_files_are_queued(mocker, config, filesystem):
         await asyncio.sleep(1)
 
         assert watcher.unprocessed.empty()
-        filename = create_file(filesystem, ext="mp4")
-        assert contains(Path(filesystem.name) / "mnt", filename.name)
+        dir_ = Path(filesystem.name) / "mnt"
+        filename = new_file(dir_, suffix="mp4")
+        assert contains(dir_, filename.name)
 
         await asyncio.sleep(1)
 
@@ -34,15 +35,16 @@ async def test_new_files_are_queued(mocker, config, filesystem):
 
 
 @pytest.mark.asyncio
-async def test_existing_files_are_queued(mocker, config, filesystem):
+async def test_existing_files_are_queued(mocker, config, filesystem, new_file):
     queue_put = mocker.patch("src.watchers.Queue.put")
     # Mock the server to the prevent actual server launching when running tests
     mocker.patch("src.api.server.WebServer.run_app")
 
     await asyncio.sleep(1)
 
-    filename = create_file(filesystem, ext="mp4")
-    assert contains(Path(filesystem.name) / "mnt", filename.name)
+    dir_ = Path(filesystem.name) / "mnt"
+    filename = new_file(dir_, suffix="mp4")
+    assert contains(dir_, filename.name)
 
     await asyncio.sleep(1)
 
@@ -52,7 +54,9 @@ async def test_existing_files_are_queued(mocker, config, filesystem):
 
 
 @pytest.mark.asyncio
-async def test_ignore_new_directories_and_symlinks(mocker, config, filesystem):
+async def test_ignore_new_directories_and_symlinks(
+    mocker, config, filesystem, new_file
+):
 
     queue_put = mocker.patch("src.watchers.Queue.put")
     # Mock the server to the prevent actual server launching when running tests
@@ -62,7 +66,9 @@ async def test_ignore_new_directories_and_symlinks(mocker, config, filesystem):
         await asyncio.sleep(1)
 
         assert watcher.unprocessed.empty()
-        filename = create_file(filesystem, is_file=False)
+
+        dir_ = Path(filesystem.name) / "mnt"
+        filename = new_file(dir_)
         assert contains(Path(filesystem.name) / "mnt", filename.name)
 
         await asyncio.sleep(1)
@@ -72,7 +78,9 @@ async def test_ignore_new_directories_and_symlinks(mocker, config, filesystem):
 
 
 @pytest.mark.asyncio
-async def test_ignore_source_subdirectories_changes(mocker, config, filesystem):
+async def test_ignore_source_subdirectories_changes(
+    mocker, config, filesystem, new_file
+):
 
     queue_put = mocker.patch("src.watchers.Queue.put")
     # Mock the server to the prevent actual server launching when running tests
@@ -83,12 +91,10 @@ async def test_ignore_source_subdirectories_changes(mocker, config, filesystem):
 
         assert watcher.unprocessed.empty()
 
-        subdir = Path(filesystem.name) / "mnt" / "video"
-        with tempfile.NamedTemporaryFile(
-            mode="w+b", suffix="mp4", dir=subdir
-        ) as filename:
+        dir_ = Path(filesystem.name) / "mnt" / "video"
+        filename = new_file(dir_, suffix="mp4")
+        assert contains(dir_, filename.name)
 
-            assert contains(subdir, filename.name)
-            await asyncio.sleep(1)
-            # Make sure the file is added to the processing queue
-            queue_put.assert_not_awaited()
+        await asyncio.sleep(1)
+        # Make sure the file is added to the processing queue
+        queue_put.assert_not_awaited()

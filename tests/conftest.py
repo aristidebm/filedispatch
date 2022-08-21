@@ -4,6 +4,8 @@ https://docs.pytest.org/en/6.2.x/fixture.html#scope-sharing-fixtures-across-clas
 import asyncio
 import os
 import tempfile
+import uuid
+
 import pytest
 
 from src.cli import Config
@@ -50,8 +52,49 @@ def filesystem():
     tempdir.cleanup()
 
 
-# Using level event loop on function scope make the test suite fail, but when run one by one everyting work as expected,
-# so we will use the same loop for an entire session [source](https://github.com/pytest-dev/pytest-asyncio#event_loop)
+@pytest.fixture
+def new_file():
+
+    _files = []  # keep track of resources
+
+    # Delegates file creation to test method, this is nice workaround for passing data to fixture by using markers.
+    def create(dir, *, suffix: str = None, binary=True):
+        if not suffix:
+            d = tempfile.TemporaryDirectory(dir=dir)
+            _files.append(d)
+            return d
+
+        mode = f"w+{'b' if binary else 't'}"
+        suffix = suffix.removeprefix(".")
+        # In some tests we need to be able to re-open the file for some kind of processing, using NamedTemporaryFile,
+        # this is only achievable on Unix based system, not on windows (https://docs.python.org/3/library/tempfile.html#tempfile.NamedTemporaryFile).
+        # so we will use open.
+        path = os.path.join(dir, "".join([f"tmp-{uuid.uuid4()}", f".{suffix}"]))
+
+        with open(path, mode) as f:
+            _files.append(f.name)
+            f.flush()
+
+        # return name not f.name for the function to have a uniform interface.
+        return f
+
+    def cleanup():
+        # NamedTemporaryFiles automatically close themselves as state here.
+        # https://docs.python.org/3/library/tempfile.html#tempfile.NamedTemporaryFile
+        for f in _files:
+            if isinstance(f, tempfile.TemporaryDirectory):
+                f.cleanup()
+            elif isinstance(f, str):
+                try:
+                    os.unlink(f)
+                except OSError:
+                    ...
+
+    yield create
+
+    cleanup()
+
+
 @pytest.fixture(scope="session")
 def event_loop():
     policy = asyncio.get_event_loop_policy()
