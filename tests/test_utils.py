@@ -1,6 +1,6 @@
 import pytest
 
-pytestmark = pytest.mark.watcher.utils
+pytestmark = pytest.mark.utils
 
 
 def test_get_protocol():
