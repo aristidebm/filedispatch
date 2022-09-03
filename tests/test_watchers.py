@@ -1,19 +1,10 @@
-import asyncio
-import dataclasses
-import os.path
-import stat
-import tempfile
 import uuid
-from collections import namedtuple
 from pathlib import Path
 
 from watchfiles import Change
 
 import pytest
 from src.watchers import FileWatcher
-
-
-from .base import contains
 
 pytestmark = pytest.mark.watcher
 

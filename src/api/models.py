@@ -35,38 +35,12 @@ from functools import cached_property, partial
 from uuid import UUID, uuid4
 
 import aiosqlite
-from pydantic import BaseModel, Field as PydanticField, constr
 
+from src.utils import LogEntry, ProtocolEnum, StatusEnum
 from .queries import *  # noqa
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 connect = partial(aiosqlite.connect, BASE_DIR / "db.sqlite3")
-
-
-class StatusEnum(str, Enum):
-    SUCCEEDED = "SUCCEEDED"
-    FAILED = "FAILED"
-
-
-class ProtocolEnum(str, Enum):
-    file = "file"
-    http = "http"
-    ftp = "ftp"
-
-
-class LogEntry(BaseModel):
-    id: UUID = PydanticField(default_factory=uuid4)
-    filename: constr(max_length=255)
-    source: constr(max_length=255)
-    destination: constr(max_length=255)
-    extension: constr(max_length=20)
-    processor: constr(max_length=255)
-    protocol: ProtocolEnum
-    status: StatusEnum
-    size: str
-    reason: Optional[str] = None
-    created: datetime = PydanticField(default_factory=datetime.today)
-    updated: datetime = PydanticField(default_factory=datetime.today)
 
 
 class Dao:

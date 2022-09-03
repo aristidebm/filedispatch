@@ -1,5 +1,7 @@
 import asyncio
 import stat
+import uuid
+
 import pytest
 import os
 from pathlib import Path
@@ -15,191 +17,436 @@ pytestmark = pytest.mark.process
 
 
 class TestLocalStorageProcessor:
+    @pytest.fixture(autouse=True)
+    def mock_processors(self, mocker):
+        # Mock background tasks (since their running forever and we are going to wait them manually)
+        # spec=True, cause a check is done in library to make sure they are dealing with a ServiceTask
+        mocker.patch("src.watchers.FileWatcher._watch", spec=True)
+        mocker.patch("src.watchers.FileWatcher._provide", spec=True)
+        mocker.patch("src.processors.HttpStorageProcessor._process", spec=True)
+        mocker.patch("src.processors.FtpStorageProcessor._process", spec=True)
+        mocker.patch("src.notifiers.Notifier._notify", spec=True)
+        mocker.patch("aiofiles.os.path.isfile", returned_value=True)
+
     @pytest.mark.asyncio
-    async def test_local_storage_processor_acquire_the_file(
-        self, mocker, config, filesystem, new_file
+    async def test_local_storage_processor_succeed_processing(
+        self, mocker, config, filesystem, await_scheduled_task
     ):
-        acquire = mocker.patch("src.processors.LocalStorageProcessor.acquire")
-        # Mock the server to the prevent actual server launching when running tests
-        mocker.patch("src.api.server.WebServer.run_app")
+        source = Path(filesystem.name) / "mnt"
+        destination = source / "video"
+        filename = source / f"tmp-{uuid.uuid4()}.mp4"
 
-        async with FileWatcher(config=config) as watcher:
-            await asyncio.sleep(1)
+        mock_get = mocker.patch(
+            "src.processors.Queue.get", side_effect=[(filename, destination)]
+        )
 
-            assert watcher.unprocessed.empty()
+        mock_copyfile = mocker.patch("src.processors.copyfile", returned_value=None)
 
-            dir_ = Path(filesystem.name) / "mnt"
-            filename = new_file(dir_, suffix="mp4")
-            assert contains(dir_, filename.name)
+        mock_notify = mocker.patch("src.processors.LocalStorageProcessor._notify")
 
-            await asyncio.sleep(1)
+        # For some reasons context manager is not working when we patch some the method
+        # of the class, so we use the plain old manner.
+        try:
+            watcher = FileWatcher(config=config)
+            await watcher.start()
+            # run all waiting tasks.
+            await await_scheduled_task()
 
-            # Make sure the file is added to the processing queue
-            acquire.assert_called_once()
+            mock_get.assert_awaited()
+            mock_copyfile.assert_awaited_once_with(
+                Path(filename), str(destination / filename.name)
+            )
+            mock_notify.assert_awaited_once_with(
+                Path(filename), Path(destination), StatusEnum.SUCCEEDED, delete=True
+            )
+        finally:
+            await watcher.stop()
 
-    # @pytest.mark.skip("fail for non determinated error yet")
     @pytest.mark.asyncio
     async def test_local_storage_processor_permissions_failure(
-        self, mocker, config, filesystem, new_file
+        self, mocker, config, filesystem, await_scheduled_task
     ):
         logger = mocker.patch("src.processors.LocalStorageProcessor.logger.exception")
-        # Mock the server to the prevent actual server launching when running tests
-        mocker.patch("src.api.server.WebServer.run_app")
 
-        async with FileWatcher(config=config) as watcher:
-            await asyncio.sleep(1)
+        source = Path(filesystem.name) / "mnt"
+        destination = source / "video"
+        filename = source / f"tmp-{uuid.uuid4()}.mp4"
 
-            assert watcher.unprocessed.empty()
-            mode = 0o000
-            dir_ = Path(filesystem.name) / "mnt"
+        mock_get = mocker.patch(
+            "src.processors.Queue.get", side_effect=[(filename, destination)]
+        )
 
-            assert stat.filemode(mode) == "?---------"
-            os.chmod(dir_ / "video", mode)
+        reason = "PermissionError: Permission Denied"
 
-            filename = new_file(dir_, suffix="mp4")
-            assert contains(dir_, filename.name)
+        mock_copyfile = mocker.patch(
+            "src.processors.copyfile",
+            side_effect=PermissionError(reason),
+        )
 
-            await asyncio.sleep(1)
+        mock_notify = mocker.patch("src.processors.LocalStorageProcessor._notify")
 
-            # Make sure the file is added to the processing queue
-            logger.assert_called_once()
+        # For some reasons context manager is not working when we patch some the method
+        # of the class, so we use the plain old manner.
+        try:
+            watcher = FileWatcher(config=config)
+            await watcher.start()
+            # run all waiting tasks.
+            await await_scheduled_task()
 
-    @pytest.mark.asyncio
-    async def test_local_storage_processor_process_the_file(
-        self, mocker, config, filesystem, new_file
-    ):
-        move = mocker.patch("src.processors.LocalStorageProcessor._move")
-        # Mock the server to the prevent actual server launching when running tests
-        mocker.patch("src.api.server.WebServer.run_app")
-
-        async with FileWatcher(config=config) as watcher:
-            await asyncio.sleep(1)
-
-            assert watcher.unprocessed.empty()
-
-            dir_ = Path(filesystem.name) / "mnt"
-            filename = new_file(dir_, suffix="mp4")
-            assert contains(dir_, filename.name)
-
-            await asyncio.sleep(1)
-
-            # Make sure the file is added to the processing queue
-            move.assert_awaited_once()
-
-    # @pytest.mark.skip("fail in test suite but not when executed alone")
-    @pytest.mark.asyncio
-    async def test_local_storage_processor_generated_payload(
-        self, mocker, config, filesystem, new_file
-    ):
-
-        notify = mocker.patch("src.processors.LocalStorageProcessor._notify")
-        # Mock the server to the prevent actual server launching when running tests
-        mocker.patch("src.api.server.WebServer.run_app")
-
-        async with FileWatcher(config=config) as watcher:
-            await asyncio.sleep(1)
-
-            assert watcher.unprocessed.empty()
-
-            dir_ = Path(filesystem.name) / "mnt"
-            video = dir_ / "video"
-            filename = new_file(dir_, suffix="mp4")
-            assert contains(dir_, filename.name)
-
-            await asyncio.sleep(1)
-
-            # Make sure the file is added to the processing queue
-            notify.assert_awaited_once()
-
-            # Test generated payload
-            processor = watcher.PROCESSORS_REGISTRY["file"]
-            payload = await processor._get_payload(
-                filename.name, video, StatusEnum.SUCCEEDED
+            mock_get.assert_awaited()
+            mock_copyfile.assert_awaited_once_with(
+                Path(filename), str(destination / filename.name)
             )
-            assert payload.get("id")
-            assert payload.get("filename") == os.path.basename(filename.name)
-            assert payload.get("extension") == "mp4"
-            assert payload.get("source") == os.path.dirname(filename.name)
-            assert payload.get("destination") == str(video)
-            assert payload.get("processor") == processor.fancy_name.upper()
-            assert payload.get("protocol") == "file"
-            assert payload.get("size")
-            assert not payload.get("reason")
 
-            # FIXME: Test the generated logs in case of failure.
+            # Make sure we log the exception.
+            logger.assert_called_once()
+            mock_notify.assert_awaited_once_with(
+                Path(filename),
+                Path(destination),
+                StatusEnum.FAILED,
+                reason,
+            )
+        finally:
+            await watcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_payload_is_sent_to_notifier(
+        self, mocker, config, filesystem, await_scheduled_task
+    ):
+
+        source = Path(filesystem.name) / "mnt"
+        destination = source / "video"
+        filename = source / f"tmp-{uuid.uuid4()}.mp3"
+
+        exception = mocker.patch(
+            "src.processors.LocalStorageProcessor.logger.exception"
+        )
+
+        mock_copyfile = mocker.patch("src.processors.copyfile", returned_value=None)
+
+        mock_get = mocker.patch(
+            "src.processors.Queue.get", side_effect=[(filename, destination)]
+        )
+
+        notifier = mocker.MagicMock()
+        mock_acquire = mocker.Mock(return_value=None)
+        notifier.acquire = mock_acquire
+        notifier.maybe_start = mocker.AsyncMock()
+        notifier.stop = mocker.AsyncMock()
+        mock = mocker.PropertyMock(return_value=notifier)
+
+        mocker.patch(
+            "src.processors.LocalStorageProcessor.notifier",
+            new=mock,
+        )
+
+        try:
+            watcher = FileWatcher(config=config)
+            await watcher.start()
+
+            await await_scheduled_task()
+            mock_get.assert_awaited()
+            mock_copyfile.assert_awaited_once_with(
+                Path(filename), str(destination / filename.name)
+            )
+            exception.assert_not_called()
+            mock_acquire.assert_called_once_with(mocker.ANY)
+        finally:
+            await watcher.stop()
 
 
 class TestHttpStorageProcessor:
-    @pytest.mark.asyncio
-    async def test_http_storage_processor_acquire_the_file(
-        self, mocker, config, filesystem, new_file
-    ):
-        acquire = mocker.patch("src.processors.HttpStorageProcessor.acquire")
-        # Mock the server to the prevent actual server launching when running tests
-        mocker.patch("src.api.server.WebServer.run_app")
-
-        async with FileWatcher(config=config) as watcher:
-            await asyncio.sleep(1)
-
-            assert watcher.unprocessed.empty()
-
-            dir_ = Path(filesystem.name) / "mnt"
-            filename = new_file(dir_, suffix="mp3")
-            assert contains(dir_, filename.name)
-
-            await asyncio.sleep(1)
-
-            # Make sure the file is added to the processing queue
-            acquire.assert_called_once()
+    @pytest.fixture(autouse=True)
+    def mock_processors(self, mocker):
+        # Mock background tasks (since their running forever and we are going to wait them manually)
+        # spec=True, cause a check is done in library to make sure they are dealing with a ServiceTask
+        mocker.patch("src.watchers.FileWatcher._watch", spec=True)
+        mocker.patch("src.watchers.FileWatcher._provide", spec=True)
+        mocker.patch("src.processors.LocalStorageProcessor._process", spec=True)
+        mocker.patch("src.processors.FtpStorageProcessor._process", spec=True)
+        mocker.patch("src.notifiers.Notifier._notify", spec=True)
+        mocker.patch("aiofiles.os.path.isfile", returned_value=True)
 
     @pytest.mark.asyncio
-    @pytest.mark.process
     async def test_http_storage_processor_server_down_failure(
-        self, mocker, config, filesystem, new_file, aiohttp_server
+        self, mocker, config, filesystem, aiohttp_server, await_scheduled_task
     ):
-        # Mock the server to the prevent actual server launching when running tests
-        mocker.patch("src.api.server.WebServer.run_app")
 
-        debug = mocker.patch("src.processors.HttpStorageProcessor.logger.debug")
         PORT = 8000
 
         await aiohttp_server(make_app(status=500), port=PORT)
 
-        async with FileWatcher(config=config, port=PORT) as watcher:
-
-            await asyncio.sleep(1)
-
-            assert watcher.unprocessed.empty()
-
-            dir_ = Path(filesystem.name) / "mnt"
-            filename = new_file(dir_, suffix="mp3")
-            assert contains(dir_, filename.name)
-
-            await asyncio.sleep(1)
-
-            debug.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_http_storage_process_the_file(
-        self, mocker, config, filesystem, new_file, aiohttp_server
-    ):
-        # Mock the server to the prevent actual server launching when running tests
-        mocker.patch("src.api.server.WebServer.run_app")
+        source = Path(filesystem.name) / "mnt"
+        destination = f"http://127.0.0.1:{PORT}/documents/audio"
+        filename = source / f"tmp-{uuid.uuid4()}.mp3"
 
         debug = mocker.patch("src.processors.HttpStorageProcessor.logger.debug")
 
+        mock_get = mocker.patch(
+            "src.processors.Queue.get", side_effect=[(filename, destination)]
+        )
+
+        mock_open = mocker.patch(
+            "src.processors.aiofiles.open", new_callable=mocker.AsyncMock
+        )
+
+        mock_notify = mocker.patch("src.processors.HttpStorageProcessor._notify")
+
+        try:
+            watcher = FileWatcher(config=config, port=PORT)
+            await watcher.start()
+
+            await await_scheduled_task()
+            mock_get.assert_awaited()
+            mock_open.assert_awaited_once_with(filename, "rb")
+
+            debug.assert_called_once()
+
+            mock_notify.assert_awaited_once_with(
+                Path(filename),
+                destination,
+                StatusEnum.FAILED,
+                mocker.ANY,
+            )
+        finally:
+            await watcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_http_storage_process_the_file(
+        self, mocker, config, filesystem, aiohttp_server, await_scheduled_task
+    ):
+
         PORT = 8000
-        await aiohttp_server(make_app(), port=PORT)
 
-        async with FileWatcher(config, port=PORT) as watcher:
-            await asyncio.sleep(1)
+        await aiohttp_server(make_app(status=200), port=PORT)
 
-            assert watcher.unprocessed.empty()
+        source = Path(filesystem.name) / "mnt"
+        destination = f"http://127.0.0.1:{PORT}/documents/audio"
+        filename = source / f"tmp-{uuid.uuid4()}.mp3"
 
-            dir_ = Path(filesystem.name) / "mnt"
-            filename = new_file(dir_, suffix="mp3")
-            assert contains(dir_, filename.name)
+        debug = mocker.patch("src.processors.HttpStorageProcessor.logger.debug")
 
-            await asyncio.sleep(1)
+        mock_get = mocker.patch(
+            "src.processors.Queue.get", side_effect=[(filename, destination)]
+        )
+
+        mock_open = mocker.patch(
+            "src.processors.aiofiles.open", new_callable=mocker.AsyncMock
+        )
+
+        mock_notify = mocker.patch("src.processors.HttpStorageProcessor._notify")
+
+        try:
+            watcher = FileWatcher(config=config, port=PORT)
+            await watcher.start()
+
+            await await_scheduled_task()
+            mock_get.assert_awaited()
+            mock_open.assert_awaited_once_with(filename, "rb")
 
             debug.assert_not_called()
+
+            mock_notify.assert_awaited_once_with(
+                Path(filename),
+                destination,
+                StatusEnum.SUCCEEDED,
+            )
+        finally:
+            await watcher.stop()
+
+    @pytest.mark.asyncio
+    async def test_payload_is_sent_to_notifier(
+        self, mocker, config, filesystem, aiohttp_server, await_scheduled_task
+    ):
+        PORT = 8000
+
+        await aiohttp_server(make_app(status=200), port=PORT)
+
+        source = Path(filesystem.name) / "mnt"
+        destination = f"http://127.0.0.1:{PORT}/documents/audio"
+        filename = source / f"tmp-{uuid.uuid4()}.mp3"
+
+        debug = mocker.patch("src.processors.HttpStorageProcessor.logger.debug")
+
+        mock_get = mocker.patch(
+            "src.processors.Queue.get", side_effect=[(filename, destination)]
+        )
+
+        mock_open = mocker.patch(
+            "src.processors.aiofiles.open", new_callable=mocker.AsyncMock
+        )
+
+        notifier = mocker.MagicMock()
+        mock_acquire = mocker.Mock(return_value=None)
+        notifier.acquire = mock_acquire
+        notifier.maybe_start = mocker.AsyncMock()
+        notifier.stop = mocker.AsyncMock()
+        mock = mocker.PropertyMock(return_value=notifier)
+
+        mocker.patch(
+            "src.processors.HttpStorageProcessor.notifier",
+            new=mock,
+        )
+
+        try:
+            watcher = FileWatcher(config=config, port=PORT)
+            await watcher.start()
+
+            await await_scheduled_task()
+            mock_get.assert_awaited()
+            mock_open.assert_awaited_once_with(filename, "rb")
+
+            debug.assert_not_called()
+
+            mock_acquire.assert_called_once_with(mocker.ANY)
+        finally:
+            await watcher.stop()
+
+
+# FIXME: Add FtpServer test later.
+
+# class TestFtpStorageProcessor:
+#     @pytest.fixture(autouse=True)
+#     def mock_processors(self, mocker):
+#         # Mock background tasks (since their running forever and we are going to wait them manually)
+#         # spec=True, cause a check is done in library to make sure they are dealing with a ServiceTask
+#         mocker.patch("src.watchers.FileWatcher._watch", spec=True)
+#         mocker.patch("src.watchers.FileWatcher._provide", spec=True)
+#         mocker.patch("src.processors.LocalStorageProcessor._process", spec=True)
+#         mocker.patch("src.processors.HttpStorageProcessor._process", spec=True)
+#         mocker.patch("src.notifiers.Notifier._notify", spec=True)
+#
+#     @pytest.mark.asyncio
+#     async def test_http_storage_processor_server_down_failure(
+#         self, mocker, config, filesystem, await_scheduled_task
+#     ):
+#
+#         PORT = 8000
+#
+#         await aiohttp_server(make_app(status=500), port=PORT)
+#
+#         source = Path(filesystem.name) / "mnt"
+#         destination = f"http://127.0.0.1:{PORT}/documents/audio"
+#         filename = source / f"tmp-{uuid.uuid4()}.mp3"
+#
+#         debug = mocker.patch("src.processors.HttpStorageProcessor.logger.debug")
+#
+#         mock_get = mocker.patch(
+#             "src.processors.Queue.get", side_effect=[(filename, destination)]
+#         )
+#
+#         mock_open = mocker.patch(
+#             "src.processors.aiofiles.open", new_callable=mocker.AsyncMock
+#         )
+#
+#         mock_notify = mocker.patch("src.processors.HttpStorageProcessor._notify")
+#
+#         try:
+#             watcher = FileWatcher(config=config, port=PORT)
+#             await watcher.start()
+#
+#             await await_scheduled_task()
+#             mock_get.assert_awaited()
+#             mock_open.assert_awaited_once_with(filename, "rb")
+#
+#             debug.assert_called_once()
+#
+#             mock_notify.assert_awaited_once_with(
+#                 Path(filename),
+#                 destination,
+#                 StatusEnum.FAILED,
+#                 mocker.ANY,
+#             )
+#         finally:
+#             await watcher.stop()
+
+# @pytest.mark.asyncio
+# async def test_http_storage_process_the_file(
+#         self, mocker, config, filesystem, aiohttp_server, await_scheduled_task
+# ):
+#
+#     PORT = 8000
+#
+#     await aiohttp_server(make_app(status=200), port=PORT)
+#
+#     source = Path(filesystem.name) / "mnt"
+#     destination = f"http://127.0.0.1:{PORT}/documents/audio"
+#     filename = source / f"tmp-{uuid.uuid4()}.mp3"
+#
+#     debug = mocker.patch("src.processors.HttpStorageProcessor.logger.debug")
+#
+#     mock_get = mocker.patch(
+#         "src.processors.Queue.get", side_effect=[(filename, destination)]
+#     )
+#
+#     mock_open = mocker.patch(
+#         "src.processors.aiofiles.open", new_callable=mocker.AsyncMock
+#     )
+#
+#     mock_notify = mocker.patch("src.processors.HttpStorageProcessor._notify")
+#
+#     try:
+#         watcher = FileWatcher(config=config, port=PORT)
+#         await watcher.start()
+#
+#         await await_scheduled_task()
+#         mock_get.assert_awaited()
+#         mock_open.assert_awaited_once_with(filename, "rb")
+#
+#         debug.assert_not_called()
+#
+#         mock_notify.assert_awaited_once_with(
+#             Path(filename),
+#             destination,
+#             StatusEnum.SUCCEEDED,
+#         )
+#     finally:
+#         await watcher.stop()
+#
+# @pytest.mark.asyncio
+# async def test_payload_is_sent_to_notifier(
+#         self, mocker, config, filesystem, aiohttp_server, await_scheduled_task
+# ):
+#     PORT = 8000
+#
+#     await aiohttp_server(make_app(status=200), port=PORT)
+#
+#     source = Path(filesystem.name) / "mnt"
+#     destination = f"http://127.0.0.1:{PORT}/documents/audio"
+#     filename = source / f"tmp-{uuid.uuid4()}.mp3"
+#
+#     debug = mocker.patch("src.processors.HttpStorageProcessor.logger.debug")
+#
+#     mock_get = mocker.patch(
+#         "src.processors.Queue.get", side_effect=[(filename, destination)]
+#     )
+#
+#     mock_open = mocker.patch(
+#         "src.processors.aiofiles.open", new_callable=mocker.AsyncMock
+#     )
+#
+#     notifier = mocker.MagicMock()
+#     mock_acquire = mocker.Mock(return_value=None)
+#     notifier.acquire = mock_acquire
+#     notifier.maybe_start = mocker.AsyncMock()
+#     notifier.stop = mocker.AsyncMock()
+#     mock = mocker.PropertyMock(return_value=notifier)
+#
+#     mocker.patch(
+#         "src.processors.HttpStorageProcessor.notifier",
+#         new=mock,
+#     )
+#
+#     try:
+#         watcher = FileWatcher(config=config, port=PORT)
+#         await watcher.start()
+#
+#         await await_scheduled_task()
+#         mock_get.assert_awaited()
+#         mock_open.assert_awaited_once_with(filename, "rb")
+#
+#         debug.assert_not_called()
+#
+#         mock_acquire.assert_called_once_with(mocker.ANY)
+#     finally:
+#         await watcher.stop()

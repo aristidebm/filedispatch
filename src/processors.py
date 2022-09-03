@@ -17,8 +17,13 @@ from aiofiles.os import wrap
 from aiohttp_retry import RetryClient, ExponentialRetry
 from aiohttp.client_exceptions import ClientError
 
-from src.api.models import LogEntry, ProtocolEnum, StatusEnum
-from .utils import PATH, get_protocol, FtpUrl
+from .utils import (
+    PATH,
+    get_protocol,
+    get_payload,
+    FtpUrl,
+    StatusEnum,
+)
 from .notifiers import Notifier
 
 copyfile = wrap(shutil.copyfile)
@@ -51,8 +56,9 @@ copyfile = wrap(shutil.copyfile)
 
 class BaseStorageProcessor(mode.Service):
 
+    abstract = True
+
     fancy_name: str = "Base Processor"
-    notifier: Notifier = None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -75,53 +81,20 @@ class BaseStorageProcessor(mode.Service):
     ):
 
         try:
-            payload = await self._get_payload(filename, destination, status, reason)
-        except (error_wrappers.ValidationError, OSError) as exp:
+            payload = await get_payload(
+                filename, destination, status, self.fancy_name, reason
+            )
+        except error_wrappers.ValidationError as exp:
             self.logger.debug(exp)
         else:
             # start notifier on demand
             await self.notifier.maybe_start()
             self.notifier.acquire(payload)
-            if delete:
+            if delete and status != StatusEnum.FAILED:
                 try:
                     await aiofiles.os.unlink(filename)
                 except OSError as exp:
                     self.logger.debug(exp)
-
-    async def _get_payload(self, filename, destination, status, reason=None):
-        async def get_filesize():
-            suffix = ["KB", "MB", "GB", "TB"]
-            quot = st_size = await aiofiles.os.path.getsize(filename)
-            size = None
-            idx = -1
-
-            while math.floor(quot):
-                size, quot = quot, quot / 1024
-                idx += 1
-                # stop on terabytes
-                if idx == len(suffix) - 1:
-                    break
-
-            if size:
-                size = f"{size: .2f} {suffix[idx]}"
-            else:
-                size = f"{st_size / 1024: .2f} {suffix[0]}"
-
-            return size
-
-        extension = os.path.splitext(filename)[1].removeprefix(".")
-
-        return LogEntry(
-            filename=os.path.basename(filename),
-            destination=str(destination),
-            source=os.path.dirname(filename),
-            extension=extension,
-            processor=self.fancy_name.upper(),
-            protocol=ProtocolEnum[get_protocol(destination)],
-            status=status,
-            size=await get_filesize(),
-            reason=reason,
-        ).dict()
 
     @cached_property
     def notifier(self):
@@ -141,11 +114,11 @@ class LocalStorageProcessor(BaseStorageProcessor):
 
     @mode.Service.task
     async def _process(self, **kwargs):
-        asyncio.create_task(self._move())
+        filename, destination = await self.unprocessed.get()
+        asyncio.create_task(self._move(filename, destination, **kwargs))
         await self.sleep(1.0)
 
-    async def _move(self, **kwargs):
-        filename, destination = await self.unprocessed.get()
+    async def _move(self, filename, destination, **kwargs):
         try:
             basename = os.path.basename(filename)
             await copyfile(filename, os.path.join(destination, basename))
@@ -169,13 +142,12 @@ class HttpStorageProcessor(BaseStorageProcessor):
     @mode.Service.task
     async def _process(self, **kwargs):
         while not self.should_stop:
-            asyncio.create_task(self._send(**kwargs))
+            filename, destination = await self.unprocessed.get()
+            asyncio.create_task(self._send(filename, destination, **kwargs))
             await self.sleep(1.0)
 
-    async def _send(self, **kwargs):
+    async def _send(self, filename, destination, **kwargs):
         # https://docs.aiohttp.org/en/stable/multipart.html#sending-multipart-requests
-
-        filename, destination = await self.unprocessed.get()
 
         with aiohttp.MultipartWriter() as writer:
             try:
@@ -188,7 +160,7 @@ class HttpStorageProcessor(BaseStorageProcessor):
                 await self._notify(filename, destination, StatusEnum.FAILED, reason)
                 return
             # keep default aiohttp_retry settings.
-            async with RetryClient() as client:
+            async with RetryClient(raise_for_status=True) as client:
                 try:
                     async with client.post(destination, data=writer) as response:
                         if response.ok:
@@ -225,12 +197,11 @@ class FtpStorageProcessor(BaseStorageProcessor):
     @mode.Service.task
     async def _process(self, **kwargs):
         while not self.should_stop:
-            asyncio.create_task(self._send(**kwargs))
+            filename, destination = await self.unprocessed.get()
+            asyncio.create_task(self._send(filename, destination, **kwargs))
             await self.sleep(1.0)
 
-    async def _send(self, **kwargs):
-        filename, destination = await self.unprocessed.get()
-
+    async def _send(self, filename, destination, **kwargs):
         try:
             scheme = parse_obj_as(FtpUrl, destination)
         except error_wrappers.ValidationError as exp:

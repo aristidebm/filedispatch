@@ -9,8 +9,7 @@ import mode
 
 
 class Notifier(mode.Service):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    async def on_start(self) -> None:
         self.unprocessed = Queue()
 
     def acquire(self, payload, **kwargs):
