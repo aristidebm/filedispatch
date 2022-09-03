@@ -46,6 +46,7 @@ class FileWatcher(BaseWatcher):
     async def on_start(self) -> None:
         # The server will be closed automatically when FileWatcher is suspended
         # since the server is a runtime dependency
+        await super().on_start()
         await self.add_runtime_dependency(self.server)
 
     async def on_stop(self) -> None:
@@ -57,9 +58,6 @@ class FileWatcher(BaseWatcher):
 
     def on_init_dependencies(self):
         super().on_init_dependencies()
-        # update the loop.
-        for process in self.PROCESSORS_REGISTRY.values():
-            process.loop = self.loop
         return self.PROCESSORS_REGISTRY.values()
 
     async def on_started(self) -> None:
@@ -69,15 +67,17 @@ class FileWatcher(BaseWatcher):
     async def _collect_unprocessed(self, config=None):
         config = config or self.config
         supported = {e: f.path for f in config.folders for e in f.extensions}
+        collected = []
         for ext in supported:
             # glob doesn't support multiple extension globing
             for filename in Path(self.config.source).glob(f"*.{ext}"):
                 dest = self._find_destination(filename, config, supported)
 
-                if not dest:
+                if not dest or filename in collected:
                     continue
 
-                await self.unprocessed.put((filename, dest))
+                collected.append(filename)
+                asyncio.create_task(self.unprocessed.put((filename, dest)))
                 self.logger.debug(f"File {filename} is appended to be processed")
 
     @functools.cached_property
@@ -117,13 +117,13 @@ class FileWatcher(BaseWatcher):
     @mode.Service.task
     async def _provide(self):
         while not self.should_stop:
-            await self.sleep(1.0)
             filename, destination = await self.unprocessed.get()
             processor = self._get_processor(destination)
             # start the processor if not yet started.
             await processor.maybe_start()
             processor.acquire(filename, destination)
             self.unprocessed.task_done()
+            await self.sleep(1.0)
 
     def _get_processor(self, destination, **kwargs):
         processor = self.PROCESSORS_REGISTRY[get_protocol(destination)]
