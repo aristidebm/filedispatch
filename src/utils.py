@@ -1,10 +1,8 @@
 import math
 import os
-from datetime import datetime
 from enum import Enum
-from typing import Union, Optional
+from typing import Union
 from pathlib import Path
-from uuid import uuid4, UUID
 
 import aiofiles
 from pydantic import (
@@ -13,17 +11,14 @@ from pydantic import (
     FileUrl,
     stricturl,
     error_wrappers,
-    BaseModel,
-    Field as PydanticField,
-    constr,
 )
+
 
 __all__ = [
     "get_protocol",
     "get_filesize",
     "get_payload",
     "PATH",
-    "LogEntry",
     "StatusEnum",
     "ProtocolEnum",
 ]
@@ -38,25 +33,17 @@ class StatusEnum(str, Enum):
     FAILED = "FAILED"
 
 
+class OrderingEnum(str, Enum):
+    CREATED = "created"
+    REVERSED_CREATED = "-created"
+    BYTE_SIZE = "byte_size"
+    REVERSED_BYTE_SIZE = "-byte_size"
+
+
 class ProtocolEnum(str, Enum):
     file = "file"
     http = "http"
     ftp = "ftp"
-
-
-class LogEntry(BaseModel):
-    id: UUID = PydanticField(default_factory=uuid4)
-    filename: constr(max_length=255)
-    source: constr(max_length=255)
-    destination: constr(max_length=255)
-    extension: constr(max_length=20)
-    processor: constr(max_length=255)
-    protocol: ProtocolEnum
-    status: StatusEnum
-    size: Optional[str] = None
-    reason: Optional[str] = None
-    created: datetime = PydanticField(default_factory=datetime.today)
-    updated: datetime = PydanticField(default_factory=datetime.today)
 
 
 def get_protocol(url: str) -> str:
@@ -87,7 +74,7 @@ def clean_url(url: PATH) -> PATH:
 
 async def get_filesize(filename):
     suffix = ["KB", "MB", "GB", "TB"]
-    quot = st_size = await aiofiles.os.path.getsize(filename)
+    quot = byte_size = await aiofiles.os.path.getsize(filename)
     size = None
     idx = -1
 
@@ -101,21 +88,24 @@ async def get_filesize(filename):
     if size:
         size = f"{size: .2f} {suffix[idx]}"
     else:
-        size = f"{st_size / 1024: .2f} {suffix[0]}"
+        size = f"{byte_size / 1024: .2f} {suffix[0]}"
 
-    return size
+    return size, byte_size
 
 
 async def get_payload(filename, destination, status, processor, reason=None):
+    import src.schema  # FIXME: Fix it just temporary solution
+
     extension = os.path.splitext(filename)[1].removeprefix(".")
 
     try:
         # Skip file size fetching if the file is not accessible.
-        _size = await get_filesize(filename)
+        _size, _byte_size = await get_filesize(filename)
     except OSError:
         _size = None
+        _byte_size = None
 
-    return LogEntry(
+    return src.schema.WriteOnlyLogEntry(
         filename=os.path.basename(filename),
         destination=str(destination),
         source=os.path.dirname(filename),
@@ -124,5 +114,6 @@ async def get_payload(filename, destination, status, processor, reason=None):
         protocol=ProtocolEnum[get_protocol(destination)],
         status=status,
         size=_size,
+        byte_size=_byte_size,
         reason=reason,
     ).dict()

@@ -30,6 +30,20 @@ from .views import routes
 __version__ = "0.1.0"
 
 
+def make_app():
+    app = web.Application()
+    app.add_routes(routes)
+    # setup open api documentation as stated here (
+    # https://github.com/Maillol/aiohttp-pydantic#add-route-to-generate-open-api-specification-oas)
+    oas.setup(
+        app,
+        url_prefix=f"/api/v1/schema",
+        title_spec="File Dispatch Monitoring Api",
+        version_spec=__version__,
+    )
+    return app
+
+
 class WebServer(mode.Service):
     host: str = "127.0.0.1"
     port: int = 8080
@@ -55,17 +69,7 @@ class WebServer(mode.Service):
         await super().on_stop()
 
     def _make_app(self):
-        app = web.Application()
-        app.add_routes(routes)
-        # setup open api documentation as stated here (
-        # https://github.com/Maillol/aiohttp-pydantic#add-route-to-generate-open-api-specification-oas)
-        oas.setup(
-            app,
-            url_prefix=f"/api/v1/schema",
-            title_spec="File Dispatch Monitoring Api",
-            version_spec=__version__,
-        )
-        return app
+        return make_app()
 
     @cached_property
     def runner(self):

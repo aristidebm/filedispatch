@@ -17,10 +17,10 @@ aiofiles = "^0.8.0"
 cchardet = "^2.1.7"
 aiodns = "^3.0.0"
 PyPika = "^0.48.9"
-aiosqlite = "^0.17.0"
 aiohttp-pydantic = "^1.12.2"
 aiohttp-retry = "^2.8.3"
 mode-ng = "^0.4.0"
+aiosqlite = "^0.17.0"
 
 [tool.poetry.dev-dependencies]
 black = "^22.6.0"
@@ -28,6 +28,7 @@ pytest = "^7.1.2"
 flake8 = "^5.0.4"
 pytest-asyncio = "^0.19.0"
 pre-commit = "^2.20.0"
+pydantic-factories = "^1.6.1"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

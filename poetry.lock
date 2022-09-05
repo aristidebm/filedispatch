@@ -264,6 +264,17 @@ optional = false
 python-versions = "*"
 
 [[package]]
+name = "faker"
+version = "14.2.0"
+description = "Faker is a Python package that generates fake data for you."
+category = "dev"
+optional = false
+python-versions = ">=3.6"
+
+[package.dependencies]
+python-dateutil = ">=2.4"
+
+[[package]]
 name = "filelock"
 version = "3.8.0"
 description = "A platform independent file lock."
@@ -508,6 +519,20 @@ dotenv = ["python-dotenv (>=0.10.4)"]
 email = ["email-validator (>=1.0.3)"]
 
 [[package]]
+name = "pydantic-factories"
+version = "1.6.1"
+description = "Mock data generation for pydantic based models"
+category = "dev"
+optional = false
+python-versions = ">=3.7,<4.0"
+
+[package.dependencies]
+faker = "*"
+pydantic = ">=1.9.0"
+typing-extensions = "*"
+xeger = "*"
+
+[[package]]
 name = "pydantic-yaml"
 version = "0.8.0"
 description = "\"Adds some YAML functionality to the excellent `pydantic` library.\""
@@ -741,6 +766,14 @@ optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,>=2.7"
 
 [[package]]
+name = "xeger"
+version = "0.3.5"
+description = "A library for generating random strings from a valid regular expression."
+category = "dev"
+optional = false
+python-versions = "*"
+
+[[package]]
 name = "yarl"
 version = "1.8.1"
 description = "Yet another URL library"
@@ -755,7 +788,7 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10"
-content-hash = "8bbc1d4a142b24c7d43e0b2fbc9270ee81cdb123dfc5811c2f550a2a878da381"
+content-hash = "db246226aff06c391fcfd3369e2cc0d664e3ded5bacae20c866b41acafed01f0"
 
 [metadata.files]
 aiodns = []
@@ -792,6 +825,7 @@ colorlog = []
 croniter = []
 deprecated = []
 distlib = []
+faker = []
 filelock = []
 flake8 = []
 frozenlist = []
@@ -833,6 +867,7 @@ pycares = []
 pycodestyle = []
 pycparser = []
 pydantic = []
+pydantic-factories = []
 pydantic-yaml = []
 pyflakes = []
 pyparsing = [
@@ -866,4 +901,5 @@ typing-extensions = []
 virtualenv = []
 watchfiles = []
 wrapt = []
+xeger = []
 yarl = []

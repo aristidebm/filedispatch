@@ -1,57 +1,46 @@
+from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
-from typing import Optional
-from datetime import datetime
+from typing import List, Union, Any, Optional
 
 from pydantic import Field
 
 from aiohttp import web
 from aiohttp_pydantic import PydanticView
+from aiohttp_pydantic.oas.typing import r200, r201, r204, r404
 
-from .models import Dao, LogEntry, StatusEnum  # noqa
+from src.schema import ReadOnlyLogEntry, WriteOnlyLogEntry, QueryDict, Error
+from src.utils import StatusEnum, OrderingEnum
+from src.api.models import Dao
 
 routes = web.RouteTableDef()
 
 
-@routes.view("/api/logs")
-class LogsView(PydanticView):
-
+class BasicView(PydanticView):
     dao: Dao = Dao()
 
-    async def get(
-        self,
-        id: Optional[UUID] = Field(None, description="Retrieves Log by ID"),
-        status: Optional[StatusEnum] = Field(None, description="Filter logs by status"),
-        destination: Optional[str] = Field(
-            None, description="Filter logs by file destination"
-        ),
-        size__lte: Optional[Decimal] = Field(
-            None, description="Filter logs by size less than or equal"
-        ),
-        size__gte: Optional[Decimal] = Field(
-            None, description="Filter logs by size greater than or equal"
-        ),
-        filename: Optional[str] = Field(
-            None, description="Filter logs by file filename"
-        ),
-        extension: Optional[str] = Field(
-            None, description="Filter logs by file extension"
-        ),
-        protocol: Optional[str] = Field(
-            None, description="Filter logs by protocol used to send the file"
-        ),
-        created__lte: Optional[datetime] = Field(
-            None, description="Filter logs by creation date less than or equal"
-        ),
-        created__gte: Optional[datetime] = Field(
-            None, description="Filter logs by creation date greater than or equal"
-        ),
-    ):
-        data = await self.dao.fetch_one()
+
+@routes.view(r"/api/v1/logs", name="logs_list")
+class ListView(BasicView):
+    # I don't if doing think like so (passing filters instead of key value pairs, key = Field()) will work.
+    async def get(self, query_dict: QueryDict) -> r200[List[ReadOnlyLogEntry]]:
+        data = await self.dao.fetch_all(query_dict)
+        data = [item.dict() for item in data]
         return web.json_response(data)
 
-    async def post(self, log: LogEntry):
-        ...
+    async def post(self, data: WriteOnlyLogEntry) -> r201[ReadOnlyLogEntry]:
+        data = await self.dao.insert(data)
+        return web.json_response(data.dict())
 
-    async def delete(self, id: UUID = Field(..., description="Log ID")):
-        ...
+
+@routes.view(r"/api/v1/logs/{id}", name="logs_detail")
+class DetailView(BasicView):
+    async def get(
+        self, id: UUID = Field(..., description="Log ID")
+    ) -> Union[r200[ReadOnlyLogEntry], r404[Error]]:
+        data = await self.dao.fetch_one(pk=id)
+        return web.json_response(data=data.dict())
+
+    async def delete(self, id: UUID = Field(..., description="Log ID")) -> r204[Any]:
+        await self.dao.delete(pk=id)
+        return web.json_response(status=204)
