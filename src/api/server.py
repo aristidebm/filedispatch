@@ -1,4 +1,4 @@
-##### --- choix technique ----
+# --- choix technique ----
 
 # It will be good if we can use this server as runtime dependency (https://github.com/ask/mode#what-is-mode) of file dispatch.
 # https://docs.aiohttp.org/en/stable/web_quickstart.html
@@ -37,7 +37,7 @@ def make_app():
     # https://github.com/Maillol/aiohttp-pydantic#add-route-to-generate-open-api-specification-oas)
     oas.setup(
         app,
-        url_prefix=f"/api/v1/schema",
+        url_prefix="/api/v1/schema",
         title_spec="File Dispatch Monitoring Api",
         version_spec=__version__,
     )

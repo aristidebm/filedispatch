@@ -9,7 +9,7 @@
 # + Ajouter des equivalent de method asynchrones aux method existante de pypika
 # + Ensuite en sortie, on veut bien avoir des models pydantic car, plus facile a manipuler en python qu'avec les autre.
 
-##### ----- Choix techniques ------------
+# ----- Choix techniques ------------
 
 # En attendant je vais utiliser :
 # + Pypika pour la generation de requeste sql https://github.com/kayak/pypika
