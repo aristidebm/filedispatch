@@ -19,8 +19,11 @@ __all__ = [
     "get_filesize",
     "get_payload",
     "PATH",
+    "FtpUrl",
     "StatusEnum",
     "ProtocolEnum",
+    "OrderingEnum",
+    "move_dict_key_to_top",
 ]
 
 FtpUrl = stricturl(allowed_schemes=["ftp", "sftp"])
@@ -117,3 +120,7 @@ async def get_payload(filename, destination, status, processor, reason=None):
         byte_size=_byte_size,
         reason=reason,
     ).dict()
+
+
+def move_dict_key_to_top(data, key):
+    return dict(sorted(data.items(), key=lambda x: int(x[0] != key)))

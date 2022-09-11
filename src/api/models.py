@@ -15,31 +15,31 @@
 # + Pypika pour la generation de requeste sql https://github.com/kayak/pypika
 # + aiosqlite pour l'execution des requetes https://github.com/omnilib/aiosqlite en mode asynchrone.
 # + Il faut faire la modelisation du LogEntry.
-
+import datetime
+import json
 import operator
+import uuid
 from collections import namedtuple
-from pathlib import Path
 from typing import Mapping, List
-from functools import partial
 from uuid import UUID
 
 import aiosqlite
-from pydantic import parse_obj_as, ValidationError
+from pydantic import parse_obj_as
+from pypika import functions as fn
+from pypika import CustomFunction, Order
 
 from src.schema import ReadOnlyLogEntry, WriteOnlyLogEntry, QueryDict
 
 from .queries import (
     CreateTableQuery,
-    CreateLogEntry,
-    ListLogEntries,
-    RetrieveLogEntry,
-    DeleteLogEntry,
+    CreateLogEntryQuery,
+    ListLogEntriesQuery,
+    RetrieveLogEntryQuery,
+    DeleteLogEntryQuery,
     LogEntry,
 )
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
-connect = partial(aiosqlite.connect, BASE_DIR / "db.sqlite3")
-
+SQLITE_DATE_CAST = CustomFunction("strftime", ["format", "date"])
 
 LOOKUP_TO_OPERATORS = {
     "gte": operator.ge,
@@ -62,52 +62,81 @@ class Dao:
     # FIXME: I Think The method parse_obj_as here https://pydantic-docs.helpmanual.io/usage/models/#model-properties
     #  can help as returning Pyandic models
 
+    def __init__(self, connector=None):
+        self._connector = connector
+
+    @property
+    def connector(self):
+        return self._connector
+
+    @connector.setter
+    def connector(self, connector):
+        self._connector = connector
+
     async def fetch_all(self, query_dict: QueryDict) -> List[ReadOnlyLogEntry]:
         query_dict = vars(query_dict)
-        query = ListLogEntries
+        query = ListLogEntriesQuery
+        ordering = query_dict.pop("ordering", None)
         filters = self._get_filters(query_dict)
 
         for f in filters:
-            query = query.where(f.operator(f.field_name, f.value))
+            f_value = f.value
+            f_name = f.field_name
+            if f_name.name.startswith("created"):
+                # since SQLite doesn't have date type (date are stored as TEXT)
+                # we have to mimic the desired behavior, we use SQLite strftime
+                # for this purpose.
+                f_name = SQLITE_DATE_CAST("%Y-%m-%d", f_name)
+            query = query.where(f.operator(f_name, f_value))
 
-        async with connect() as db:
+        if ordering:
+            cleaned_ordering = ordering.value.removeprefix("-")
+            if cleaned_ordering == ordering.value:
+                query = query.orderby(cleaned_ordering, order=Order.asc)
+            else:
+                query = query.orderby(cleaned_ordering, order=Order.desc)
+
+        async with self.connector() as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(query.get_sql()) as cursor:
                 rows = await cursor.fetchall()
                 return self._get_response_body(rows)
 
     async def fetch_one(self, pk: UUID) -> ReadOnlyLogEntry:
-        query = RetrieveLogEntry.get_sql()
-        query = query % {LogEntry.id: pk}
+        query = RetrieveLogEntryQuery.get_sql()
+        query = query % self.stringify({"id": pk})
 
-        async with connect() as db:
+        async with self.connector() as db:
             db.row_factory = aiosqlite.Row
             async with db.execute(query) as cursor:
-                row = await cursor.fetcone()
+                row = await cursor.fetchone()
                 data = self._get_response_body([row])
-                return data[0]
+                # returns the first element if it exists.
+                for el in data:
+                    return el
 
     async def insert(self, data: WriteOnlyLogEntry) -> ReadOnlyLogEntry:
-        def _get_fields(data: Mapping):
-            fields = {}
-            for key in data:
-                f = getattr(LogEntry, key, None)
-                fields[f] = data[key]
-            return fields
 
-        async with connect() as db:
-            query = CreateLogEntry.get_sql()
-            query = query % _get_fields(data.dict())
-            async with db.execute(query) as cursor:
-                last_rowid = cursor.lastrowid
-                return await self.fetch_one(pk=last_rowid)
+        data_json = json.loads(data.json())
+        async with self.connector() as db:
+            query = CreateLogEntryQuery.get_sql()
+            context = data_json
+            id_ = uuid.uuid4()
+            context["id"] = id_
+            context["created"] = datetime.datetime.now().isoformat()
+            context = self.stringify(context)
+            query = query % context
+            await db.execute(query)
+            await db.commit()
+
+        return await self.fetch_one(pk=id_)
 
     async def delete(self, pk: UUID) -> None:
-        async with connect() as db:
-            query = DeleteLogEntry.get_sql()
-            query = query % {LogEntry.id: pk}
-            async with db.execute(query):
-                ...
+        async with self.connector() as db:
+            query = DeleteLogEntryQuery.get_sql()
+            query = query % self.stringify({"id": pk})
+            await db.execute(query)
+            await db.commit()
 
     def _get_filters(self, data: Mapping) -> List[Filter]:
         filters = []
@@ -115,19 +144,24 @@ class Dao:
             if value:
                 lookup = "exact"
                 if len(s := f.split("__")) > 1:
-                    lookup = s[1]
+                    f, lookup = s
 
                 op_ = LOOKUP_TO_OPERATORS.get(lookup, "exact")
 
                 # We need Criterion class for filtering, when using
                 # Table instance in a Query it is automatically created
                 # for us.
-                if f := getattr(LogEntry, f, None) is None:
+                if not (f := getattr(LogEntry, f, None)):
                     continue
 
                 filters.append(Filter(field_name=f, value=value, operator=op_))
 
         return filters
 
+    def stringify(self, context):
+        return {k: "NULL" if v is None else f"'{v}'" for k, v in context.items()}
+
     def _get_response_body(self, rows: List[aiosqlite.Row]) -> List[ReadOnlyLogEntry]:
+        # remove eventual None from rows.
+        rows = filter(None, rows)
         return [parse_obj_as(ReadOnlyLogEntry, row) for row in rows]

@@ -19,18 +19,25 @@
 # - By file extension
 # - By file name
 # - By used protocol
-from functools import cached_property
+from functools import cached_property, partial
 import asyncio
+from pathlib import Path
+
+import aiosqlite
 import mode
 from aiohttp import web
 from aiohttp_pydantic import oas
 
+from src.utils import PATH
 from .views import routes
+
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 __version__ = "0.1.0"
 
 
-def make_app():
+def make_app(db: PATH = None):
     app = web.Application()
     app.add_routes(routes)
     # setup open api documentation as stated here (
@@ -41,6 +48,8 @@ def make_app():
         title_spec="File Dispatch Monitoring Api",
         version_spec=__version__,
     )
+    app["db"] = partial(aiosqlite.connect, db or BASE_DIR / "db.sqlite3")
+
     return app
 
 

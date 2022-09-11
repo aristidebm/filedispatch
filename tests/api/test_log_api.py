@@ -1,51 +1,284 @@
+import datetime
+import json
+from pathlib import Path
+
 import pytest
+import pytest_asyncio
 
 from tests.factories import LogEntryFactory
 from src.api.server import make_app
+from src.api.queries import CreateTableQuery, DropTableQuery
 
 pytestmark = pytest.mark.api
 
+BASE_URL = Path(__file__).parent.parent.parent
+
+
+@pytest_asyncio.fixture
+async def client(aiohttp_client):
+    app = make_app(db=BASE_URL / "test_db.sqlite3")
+    connector = app["db"]
+    connection = await connector()
+    query = CreateTableQuery.get_sql()
+    cursor = await connection.execute(query)
+    clt = await aiohttp_client(app)
+
+    yield clt
+    await connection.execute(DropTableQuery.get_sql())
+    await cursor.close()
+    await connection.close()
+
 
 @pytest.mark.asyncio
-async def test_create_log_entry(aiohttp_client):
-    app = make_app()
-    client = await aiohttp_client(app)
-    payload = LogEntryFactory.build().dict()
-    await client.post(app.router["logs_list"].url_for(), data=payload)
+async def test_create_log_entry(client):
+    payload = json.loads(LogEntryFactory.build().json())
+    rs = await client.post(client.app.router["logs_list"].url_for(), json=payload)
+    assert rs.status == 201
+
+    data = await rs.json()
+    assert "id" in data
+    assert data["filename"] == payload["filename"]
+    assert data["source"] == payload["source"]
+    assert data["destination"] == payload["destination"]
+    assert data["processor"] == payload["processor"]
+    assert data["protocol"] == payload["protocol"]
+    assert data["status"] == payload["status"]
+    assert data["size"] == payload["size"]
+    assert data["reason"] == payload["reason"]
+    assert "byte_size" in data
+    assert "created" in data
 
 
 @pytest.mark.asyncio
-async def test_get_all_log_entries(aiohttp_client):
+async def test_get_all_log_entries(client):
     # create a log entry here.
-    app = make_app()
-    client = await aiohttp_client(app)
-    await client.get(app.router["logs_list"].url_for())
+
+    payload = json.loads(LogEntryFactory.build().json())
+    rs = await client.post(client.app.router["logs_list"].url_for(), json=payload)
+    assert rs.status == 201
+
+    rs = await client.get(client.app.router["logs_list"].url_for())
+    assert rs.status == 200
+
+    data = await rs.json()
+    data = data[0]
+    assert "id" in data
+    assert data["filename"] == payload["filename"]
+    assert data["source"] == payload["source"]
+    assert data["destination"] == payload["destination"]
+    assert data["processor"] == payload["processor"]
+    assert data["protocol"] == payload["protocol"]
+    assert data["status"] == payload["status"]
+    assert data["size"] == payload["size"]
+    assert data["reason"] == payload["reason"]
+    assert "byte_size" in data
+    assert "created" in data
+    ...
 
 
 @pytest.mark.asyncio
-async def test_get_log_entries_by_filters(aiohttp_client):
+async def test_get_log_entries_by_status(client):
     # create a log entry here.
-    app = make_app()
-    payload = {}
-    client = await aiohttp_client(app)
-    await client.get(app.router["logs_list"].url_for(), parama=payload)
+
+    payload = json.loads(LogEntryFactory.build().json())
+    rs = await client.post(client.app.router["logs_list"].url_for(), json=payload)
+    assert rs.status == 201
+
+    filters = {"status": payload["status"]}
+    rs = await client.get(client.app.router["logs_list"].url_for(), params=filters)
+    assert rs.status == 200
+
+    data = await rs.json()
+    data = data[0]
+
+    assert "id" in data
+    assert data["filename"] == payload["filename"]
+    assert data["source"] == payload["source"]
+    assert data["destination"] == payload["destination"]
+    assert data["processor"] == payload["processor"]
+    assert data["protocol"] == payload["protocol"]
+    assert data["status"] == payload["status"]
+    assert data["size"] == payload["size"]
+    assert data["reason"] == payload["reason"]
+    assert "byte_size" in data
+    assert "created" in data
+
+    filters = {"status": "fake"}
+    rs = await client.get(client.app.router["logs_list"].url_for(), params=filters)
+    assert rs.status == 400
+
+    status = "SUCCEEDED" if payload["status"] == "FAILED" else "FAILED"
+    filters = {"status": status}
+    rs = await client.get(client.app.router["logs_list"].url_for(), params=filters)
+    assert rs.status == 200
+    data = await rs.json()
+    assert not data
 
 
 @pytest.mark.asyncio
-async def test_get_log_entry_by_id(aiohttp_client):
+async def test_get_log_entries_by_protocol(client):
     # create a log entry here.
-    id_ = str(1)
-    app = make_app()
-    payload = {}
-    client = await aiohttp_client(app)
-    await client.get(app.router["logs_detail"].url_for(id=id_), params=payload)
+
+    payload = json.loads(LogEntryFactory.build().json())
+    rs = await client.post(client.app.router["logs_list"].url_for(), json=payload)
+    assert rs.status == 201
+
+    filters = {"protocol": payload["protocol"]}
+    rs = await client.get(client.app.router["logs_list"].url_for(), params=filters)
+    assert rs.status == 200
+
+    data = await rs.json()
+    data = data[0]
+
+    assert "id" in data
+    assert data["filename"] == payload["filename"]
+    assert data["source"] == payload["source"]
+    assert data["destination"] == payload["destination"]
+    assert data["processor"] == payload["processor"]
+    assert data["protocol"] == payload["protocol"]
+    assert data["status"] == payload["status"]
+    assert data["size"] == payload["size"]
+    assert data["reason"] == payload["reason"]
+    assert "byte_size" in data
+    assert "created" in data
+
+    filters = {"protocol": "fake"}
+    rs = await client.get(client.app.router["logs_list"].url_for(), params=filters)
+    assert rs.status == 200
+    data = await rs.json()
+    assert not data
 
 
 @pytest.mark.asyncio
-async def test_delete_log_entry(aiohttp_client):
+async def test_get_log_entries_by_created(client):
+    payload = json.loads(LogEntryFactory.build().json())
+    rs = await client.post(client.app.router["logs_list"].url_for(), json=payload)
+    assert rs.status == 201
+
+    data = await rs.json()
+    created = data["created"].split("T")[0]
+    filters = {"created": created}
+    rs = await client.get(client.app.router["logs_list"].url_for(), params=filters)
+    assert rs.status == 200
+
+    data = await rs.json()
+    data = data[0]
+
+    assert "id" in data
+    assert data["filename"] == payload["filename"]
+    assert data["source"] == payload["source"]
+    assert data["destination"] == payload["destination"]
+    assert data["processor"] == payload["processor"]
+    assert data["protocol"] == payload["protocol"]
+    assert data["status"] == payload["status"]
+    assert data["size"] == payload["size"]
+    assert data["reason"] == payload["reason"]
+    assert "byte_size" in data
+    assert "created" in data
+
+    filters = {"created__lte": created}
+    rs = await client.get(client.app.router["logs_list"].url_for(), params=filters)
+    assert rs.status == 200
+    data = await rs.json()
+    assert len(data) == 1
+
+    filters = {"created__gte": created}
+    rs = await client.get(client.app.router["logs_list"].url_for(), params=filters)
+    assert rs.status == 200
+    data = await rs.json()
+    assert len(data) == 1
+
+    created = (
+        (datetime.datetime.fromisoformat(created) + datetime.timedelta(days=2))
+        .date()
+        .isoformat()
+    )
+    filters = {"created": created}
+    rs = await client.get(client.app.router["logs_list"].url_for(), params=filters)
+    assert rs.status == 200
+    data = await rs.json()
+    assert len(data) == 0
+
+    # make sure we only support iso-format
+    filters = {"created": "12/20/2023"}
+    rs = await client.get(client.app.router["logs_list"].url_for(), params=filters)
+    assert rs.status == 400
+
+
+@pytest.mark.asyncio
+async def test_get_log_entries_by_byte_size(client):
+    ...
+
+
+@pytest.mark.asyncio
+async def test_ordering_log_entries_by_creation(client):
+    payload = json.loads(LogEntryFactory.build().json())
+    rs = await client.post(client.app.router["logs_list"].url_for(), json=payload)
+    assert rs.status == 201
+
+    data = await rs.json()
+    log_1 = data["id"]
+
+    payload = json.loads(LogEntryFactory.build().json())
+    rs = await client.post(client.app.router["logs_list"].url_for(), json=payload)
+    assert rs.status == 201
+
+    data = await rs.json()
+    log_2 = data["id"]
+
+    ordering = {"ordering": "-created"}
+    rs = await client.get(client.app.router["logs_list"].url_for(), params=ordering)
+    assert rs.status == 200
+    data = await rs.json()
+
+    assert log_2 == data[0]["id"]
+    assert log_1 == data[1]["id"]
+
+
+@pytest.mark.asyncio
+async def test_ordering_log_entries_by_size(client):
+    ...
+
+
+@pytest.mark.asyncio
+async def test_get_log_entry_by_id(client):
     # create a log entry here.
-    id_ = str(1)
-    app = make_app()
-    payload = {}
-    client = await aiohttp_client(app)
-    await client.delete(app.router["logs_detail"].url_for(id=id_), params=payload)
+
+    payload = json.loads(LogEntryFactory.build().json())
+    rs = await client.post(client.app.router["logs_list"].url_for(), json=payload)
+    assert rs.status == 201
+    data = await rs.json()
+
+    rs = await client.get(client.app.router["logs_detail"].url_for(id=data["id"]))
+    assert rs.status == 200
+
+    data = await rs.json()
+
+    assert "id" in data
+    assert data["filename"] == payload["filename"]
+    assert data["source"] == payload["source"]
+    assert data["destination"] == payload["destination"]
+    assert data["processor"] == payload["processor"]
+    assert data["protocol"] == payload["protocol"]
+    assert data["status"] == payload["status"]
+    assert data["size"] == payload["size"]
+    assert data["reason"] == payload["reason"]
+    assert "byte_size" in data
+    assert "created" in data
+
+
+@pytest.mark.asyncio
+async def test_delete_log_entry(client):
+    # create a log entry here.
+    payload = json.loads(LogEntryFactory.build().json())
+    rs = await client.post(client.app.router["logs_list"].url_for(), json=payload)
+    assert rs.status == 201
+    data = await rs.json()
+
+    # attempt deletion.
+    rs = await client.delete(client.app.router["logs_detail"].url_for(id=data["id"]))
+    assert rs.status == 204
+
+    # Make sure the log-entry is successfully deleted.
+    rs = await client.get(client.app.router["logs_detail"].url_for(id=data["id"]))
+    assert rs.status == 404
