@@ -1,24 +1,25 @@
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
-from typing import Optional, Any
+from pathlib import Path
+from typing import Optional, Any, Union
 from uuid import UUID
 
-from pydantic import BaseModel, Field, constr
+from pydantic import BaseModel, Field, constr, HttpUrl
 from aiohttp_pydantic.injectors import Group
 
-from src.utils import ProtocolEnum, StatusEnum, OrderingEnum
+from src.utils import ProtocolEnum, StatusEnum, OrderingEnum, FtpUrl
 
 
 class WriteOnlyLogEntry(BaseModel):
-    filename: constr(max_length=255)
-    source: constr(max_length=255)
-    destination: constr(max_length=255)
+    filename: Path
+    source: Path
+    destination: Union[Path, HttpUrl, FtpUrl]
     extension: constr(max_length=20)
     processor: constr(max_length=255)
     protocol: ProtocolEnum
     status: StatusEnum
-    size: Optional[str] = None
-    byte_size: Optional[int] = None
+    size: Optional[constr(regex=r"^\d+ (KB|MB|GB|TB)$")] = Field(None)  # noqa F722
+    byte_size: Optional[Decimal] = None
     reason: Optional[str] = None
 
 
@@ -49,19 +50,19 @@ class QueryDict(Group):
 
     extension: Optional[str] = Field(None, description="Filter logs by file extension")
 
-    processor: Optional[str] = Field(
-        None, description="Filter logs by processor used to send the file"
+    protocol: Optional[str] = Field(
+        None, description="Filter logs by protocol used to send the file"
     )
 
-    created: Optional[datetime] = Field(
+    created: Optional[date] = Field(
         None, description="Filter logs by creation date equals to"
     )
 
-    created__lte: Optional[datetime] = Field(
+    created__lte: Optional[date] = Field(
         None, description="Filter logs by creation date less than or equal"
     )
 
-    created__gte: Optional[datetime] = Field(
+    created__gte: Optional[date] = Field(
         None, description="Filter logs by creation date greater than or equal"
     )
 
