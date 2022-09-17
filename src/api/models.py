@@ -25,7 +25,6 @@ from uuid import UUID
 
 import aiosqlite
 from pydantic import parse_obj_as
-from pypika import functions as fn
 from pypika import CustomFunction, Order
 
 from src.schema import ReadOnlyLogEntry, WriteOnlyLogEntry, QueryDict

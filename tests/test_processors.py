@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 from src.watchers import FileWatcher
-from src.api.models import StatusEnum, LogEntry
+from src.utils import StatusEnum
 
 from .base import contains, make_app
 
