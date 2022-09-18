@@ -37,28 +37,54 @@ class FileWatcher(BaseWatcher):
 
     server: WebServer = None
 
-    def __init__(self, config: Settings, **kwargs):
-        self._port = kwargs.pop("port", None)
-        super().__init__(**kwargs)
+    def __init__(
+        self,
+        config: Settings,
+        *,
+        host: str = None,
+        port: int = None,
+        log_file: PATH = None,
+        log_level: str = None,
+        no_web_app: bool = False,
+    ):
+        super().__init__()
         self.config = config
-        self.unprocessed: Queue[Tuple[PATH, PATH]] = Queue()
+        self.web_app_host = host
+        self.web_app_port = port
+        self.no_web_app = no_web_app
+        self.log_file = log_file
+        self.log_level = log_level
 
-    async def on_start(self) -> None:
-        # The server will be closed automatically when FileWatcher is suspended
-        # since the server is a runtime dependency
+    async def on_start(self):
         await super().on_start()
-        await self.add_runtime_dependency(self.server)
+        self.unprocessed: Queue[Tuple[PATH, PATH]] = Queue()
+        if (
+            not self.no_web_app
+        ):  # The server will be closed automatically when FileWatcher is suspended
+            # since the server is a runtime dependency
+            asyncio.create_task(self.add_runtime_dependency(self.server))
+        else:
+            self.logger.info("The web-app is disabled.")
 
-    async def on_stop(self) -> None:
-        # stop processor
-        for processor in self.PROCESSORS_REGISTRY.values():
-            logger.info(f"Stopping [{processor.fancy_name.lower()}] ...")
-            await processor.stop()
-        await super().on_stop()
+    # NOTE: mode take already care of graceful shutdown.
+    # async def on_stop(self) -> None:
+    #     # stop processor
+    #     for processor in self.PROCESSORS_REGISTRY.values():
+    #         logger.info(f"Stopping [{processor.fancy_name.lower()}] ...")
+    #         await processor.stop()
+    #
+    #     if self.server:
+    #         self.server.stop()
+    #
+    #     await super().on_stop()
 
     def on_init_dependencies(self):
         super().on_init_dependencies()
-        return self.PROCESSORS_REGISTRY.values()
+        processors = []
+        for p in self.PROCESSORS_REGISTRY.values():
+            p.with_web_app = not self.no_web_app
+            processors.append(p)
+        return processors
 
     async def on_started(self) -> None:
         await super().on_started()
@@ -82,7 +108,7 @@ class FileWatcher(BaseWatcher):
 
     @functools.cached_property
     def server(self):
-        return WebServer(port=self._port)
+        return WebServer()
 
     @mode.Service.task
     async def _watch(self, config=None):
@@ -143,13 +169,15 @@ class FileWatcher(BaseWatcher):
             if ext in folder.extensions:
                 return folder.path
 
-    def run(self, loglevel="INFO", logfile=None, handlers=None):
+    def run(self):
+        log_level = getattr(logging, self.log_level or "", logging.INFO)
         try:
             worker = mode.Worker(
                 self,
-                loglevel=loglevel,
-                logfile=logfile,
-                loghandlers=handlers,
+                debug=bool(log_level == logging.DEBUG),
+                daemon=True,
+                log_level=log_level,
+                log_file=self.log_file,
                 redirect_stdouts=False,
             )
             worker.execute_from_commandline()

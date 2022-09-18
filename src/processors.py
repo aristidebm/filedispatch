@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import math
 from typing import Tuple, Optional
 from functools import wraps, cached_property
@@ -54,32 +55,41 @@ copyfile = wrap(shutil.copyfile)
 # Queues inside the __intit__ method with is not async method and it take me long google search to figure it out.
 
 
+# def check_web_app(f):
+#     @functools.wraps(f)
+#     async def wrapper(self, *args, **kwargs):
+#         if not self._running_web_app:
+#             return
+#         return await f(self, *args, **kwargs)
+#
+#     return wrapper
+
+
 class BaseStorageProcessor(mode.Service):
 
     abstract = True
 
     fancy_name: str = "Base Processor"
 
-    def __init__(self, **kwargs):
+    def __init__(self, with_web_app=True, **kwargs):
+        self._with_web_app = with_web_app
         super().__init__(**kwargs)
 
     def __post_init__(self):
-        self.add_dependency(self.notifier)
+        if self.with_web_app:
+            self.add_dependency(self.notifier)
 
     async def on_start(self) -> None:
+        await super().on_start()
         # define before background task start since the use Queues
         # for the matter of safety https://mode.readthedocs.io/en/latest/userguide/services.html#ordering
         self.unprocessed: Queue[Tuple[PATH, PATH]] = Queue()
 
-    async def on_stop(self) -> None:
-        self.logger.info("Stopping the notifier ...")
-        await self.notifier.stop()
-        await super().on_stop()
-
     async def _notify(
         self, filename, destination, status, reason=None, delete=False, **kwargs
     ):
-
+        if not self.with_web_app:
+            return
         try:
             payload = await get_payload(
                 filename, destination, status, self.fancy_name, reason
@@ -99,6 +109,14 @@ class BaseStorageProcessor(mode.Service):
     @cached_property
     def notifier(self):
         return Notifier()
+
+    @property
+    def with_web_app(self):
+        return self._with_web_app
+
+    @with_web_app.setter
+    def with_web_app(self, value):
+        self._with_web_app = value
 
     @abc.abstractmethod
     async def _process(self, **kwargs):

@@ -28,11 +28,8 @@ import mode
 from aiohttp import web
 from aiohttp_pydantic import oas
 
-from src.utils import PATH
+from src.utils import PATH, BASE_DIR
 from .views import routes
-
-
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 __version__ = "0.1.0"
 
@@ -55,11 +52,11 @@ def make_app(db: PATH = None):
 
 class WebServer(mode.Service):
     host: str = "127.0.0.1"
-    port: int = 8080
-    runner = None
+    port: int = 3001
 
-    def __init__(self, port=None, **kwargs):
+    def __init__(self, host=None, port=None, **kwargs):
         super().__init__(**kwargs)
+        self.host = host or self.host
         self.port: int = port or self.port
 
     async def on_started(self) -> None:
@@ -69,7 +66,6 @@ class WebServer(mode.Service):
         # https://github.com/aio-libs/aiohttp/blob/master/aiohttp/web.py#L447
         # https://github.com/aio-libs/aiohttp/issues/2608
         await super().on_started()
-        self.logger.info("web server is starting ...")
         await self.run_app()
 
     async def on_stop(self) -> None:

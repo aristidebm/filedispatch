@@ -29,6 +29,7 @@ __all__ = [
 FtpUrl = stricturl(allowed_schemes=["ftp", "sftp"])
 FIELDS = dict(file=FileUrl, http=HttpUrl, ftp=FtpUrl)
 PATH = Union[str, Path]
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 class StatusEnum(str, Enum):
@@ -124,3 +125,11 @@ async def get_payload(filename, destination, status, processor, reason=None):
 
 def move_dict_key_to_top(data, key):
     return dict(sorted(data.items(), key=lambda x: int(x[0] != key)))
+
+
+def isfile(filename):
+    return os.path.isfile(filename)
+
+
+def has_permission(filename, mode):
+    return os.access(filename, mode)
