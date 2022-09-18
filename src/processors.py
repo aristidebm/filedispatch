@@ -15,7 +15,7 @@ import aiohttp
 import aioftp
 import aiofiles
 from aiofiles.os import wrap
-from aiohttp_retry import RetryClient, ExponentialRetry
+from aiohttp_retry import RetryClient
 from aiohttp.client_exceptions import ClientError
 
 from .utils import (

@@ -30,6 +30,7 @@ FtpUrl = stricturl(allowed_schemes=["ftp", "sftp"])
 FIELDS = dict(file=FileUrl, http=HttpUrl, ftp=FtpUrl)
 PATH = Union[str, Path]
 BASE_DIR = Path(__file__).resolve().parent.parent
+JSON_CONTENT_TYPE = "application/json"
 
 
 class StatusEnum(str, Enum):

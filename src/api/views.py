@@ -10,12 +10,10 @@ from aiohttp_pydantic import PydanticView
 from aiohttp_pydantic.oas.typing import r200, r201, r204, r404
 
 from src.schema import ReadOnlyLogEntry, WriteOnlyLogEntry, QueryDict, Error
-from src.utils import move_dict_key_to_top
+from src.utils import move_dict_key_to_top, JSON_CONTENT_TYPE
 from src.api.models import Dao
 
 routes = web.RouteTableDef()
-
-JSON_CONTENT_TYPE = "application/json"
 
 
 class BasicView(PydanticView):

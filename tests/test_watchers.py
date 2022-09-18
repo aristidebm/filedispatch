@@ -142,7 +142,7 @@ class TestProvid:
 
         mocker.patch(
             "src.watchers.Queue.get",
-            side_effect=[(filename, destination)],
+            side_effect=[(filename, destination), Exception],
         )
         mocker.patch("src.watchers.FileWatcher.sleep")  # don't want to really sleep
 

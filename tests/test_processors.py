@@ -44,12 +44,7 @@ class TestLocalStorageProcessor:
 
         mock_notify = mocker.patch("src.processors.LocalStorageProcessor._notify")
 
-        # For some reasons context manager is not working when we patch some the method
-        # of the class, so we use the plain old manner.
-        try:
-            watcher = FileWatcher(config=config)
-            await watcher.start()
-            # run all waiting tasks.
+        async with FileWatcher(config=config):
             await await_scheduled_task()
 
             mock_get.assert_awaited()
@@ -59,8 +54,6 @@ class TestLocalStorageProcessor:
             mock_notify.assert_awaited_once_with(
                 Path(filename), Path(destination), StatusEnum.SUCCEEDED, delete=True
             )
-        finally:
-            await watcher.stop()
 
     @pytest.mark.asyncio
     async def test_local_storage_processor_permissions_failure(
@@ -85,11 +78,7 @@ class TestLocalStorageProcessor:
 
         mock_notify = mocker.patch("src.processors.LocalStorageProcessor._notify")
 
-        # For some reasons context manager is not working when we patch some the method
-        # of the class, so we use the plain old manner.
-        try:
-            watcher = FileWatcher(config=config)
-            await watcher.start()
+        async with FileWatcher(config=config):
             # run all waiting tasks.
             await await_scheduled_task()
 
@@ -106,8 +95,6 @@ class TestLocalStorageProcessor:
                 StatusEnum.FAILED,
                 reason,
             )
-        finally:
-            await watcher.stop()
 
     @pytest.mark.asyncio
     async def test_payload_is_sent_to_notifier(
@@ -116,7 +103,7 @@ class TestLocalStorageProcessor:
 
         source = Path(filesystem.name) / "mnt"
         destination = source / "video"
-        filename = source / f"tmp-{uuid.uuid4()}.mp3"
+        filename = source / f"tmp-{uuid.uuid4()}.mp4"
 
         exception = mocker.patch(
             "src.processors.LocalStorageProcessor.logger.exception"
@@ -140,10 +127,7 @@ class TestLocalStorageProcessor:
             new=mock,
         )
 
-        try:
-            watcher = FileWatcher(config=config)
-            await watcher.start()
-
+        async with FileWatcher(config=config):
             await await_scheduled_task()
             mock_get.assert_awaited()
             mock_copyfile.assert_awaited_once_with(
@@ -151,8 +135,6 @@ class TestLocalStorageProcessor:
             )
             exception.assert_not_called()
             mock_acquire.assert_called_once_with(mocker.ANY)
-        finally:
-            await watcher.stop()
 
 
 class TestHttpStorageProcessor:
@@ -192,10 +174,7 @@ class TestHttpStorageProcessor:
 
         mock_notify = mocker.patch("src.processors.HttpStorageProcessor._notify")
 
-        try:
-            watcher = FileWatcher(config=config, port=PORT)
-            await watcher.start()
-
+        async with FileWatcher(config=config, port=PORT):
             await await_scheduled_task()
             mock_get.assert_awaited()
             mock_open.assert_awaited_once_with(filename, "rb")
@@ -208,8 +187,6 @@ class TestHttpStorageProcessor:
                 StatusEnum.FAILED,
                 mocker.ANY,
             )
-        finally:
-            await watcher.stop()
 
     @pytest.mark.asyncio
     async def test_http_storage_process_the_file(
@@ -236,10 +213,7 @@ class TestHttpStorageProcessor:
 
         mock_notify = mocker.patch("src.processors.HttpStorageProcessor._notify")
 
-        try:
-            watcher = FileWatcher(config=config, port=PORT)
-            await watcher.start()
-
+        async with FileWatcher(config=config, port=PORT):
             await await_scheduled_task()
             mock_get.assert_awaited()
             mock_open.assert_awaited_once_with(filename, "rb")
@@ -251,8 +225,6 @@ class TestHttpStorageProcessor:
                 destination,
                 StatusEnum.SUCCEEDED,
             )
-        finally:
-            await watcher.stop()
 
     @pytest.mark.asyncio
     async def test_payload_is_sent_to_notifier(
@@ -288,10 +260,7 @@ class TestHttpStorageProcessor:
             new=mock,
         )
 
-        try:
-            watcher = FileWatcher(config=config, port=PORT)
-            await watcher.start()
-
+        async with FileWatcher(config=config, port=PORT):
             await await_scheduled_task()
             mock_get.assert_awaited()
             mock_open.assert_awaited_once_with(filename, "rb")
@@ -299,12 +268,11 @@ class TestHttpStorageProcessor:
             debug.assert_not_called()
 
             mock_acquire.assert_called_once_with(mocker.ANY)
-        finally:
-            await watcher.stop()
 
 
 # FIXME: Add FtpServer test later.
 
+#
 # class TestFtpStorageProcessor:
 #     @pytest.fixture(autouse=True)
 #     def mock_processors(self, mocker):
@@ -341,7 +309,7 @@ class TestHttpStorageProcessor:
 #
 #         mock_notify = mocker.patch("src.processors.HttpStorageProcessor._notify")
 #
-#         try:
+#         async with FileWatcher(config=config, port=PORT):
 #             watcher = FileWatcher(config=config, port=PORT)
 #             await watcher.start()
 #
@@ -357,12 +325,11 @@ class TestHttpStorageProcessor:
 #                 StatusEnum.FAILED,
 #                 mocker.ANY,
 #             )
-#         finally:
-#             await watcher.stop()
-
+#
+#
 # @pytest.mark.asyncio
 # async def test_http_storage_process_the_file(
-#         self, mocker, config, filesystem, aiohttp_server, await_scheduled_task
+#     self, mocker, config, filesystem, aiohttp_server, await_scheduled_task
 # ):
 #
 #     PORT = 8000
@@ -385,7 +352,7 @@ class TestHttpStorageProcessor:
 #
 #     mock_notify = mocker.patch("src.processors.HttpStorageProcessor._notify")
 #
-#     try:
+#     async with FileWatcher(config=config, port=PORT):
 #         watcher = FileWatcher(config=config, port=PORT)
 #         await watcher.start()
 #
@@ -400,12 +367,11 @@ class TestHttpStorageProcessor:
 #             destination,
 #             StatusEnum.SUCCEEDED,
 #         )
-#     finally:
-#         await watcher.stop()
+#
 #
 # @pytest.mark.asyncio
 # async def test_payload_is_sent_to_notifier(
-#         self, mocker, config, filesystem, aiohttp_server, await_scheduled_task
+#     self, mocker, config, filesystem, aiohttp_server, await_scheduled_task
 # ):
 #     PORT = 8000
 #
@@ -437,7 +403,7 @@ class TestHttpStorageProcessor:
 #         new=mock,
 #     )
 #
-#     try:
+#     async with FileWatcher(config=config, port=PORT):
 #         watcher = FileWatcher(config=config, port=PORT)
 #         await watcher.start()
 #
@@ -448,5 +414,3 @@ class TestHttpStorageProcessor:
 #         debug.assert_not_called()
 #
 #         mock_acquire.assert_called_once_with(mocker.ANY)
-#     finally:
-#         await watcher.stop()

@@ -37,8 +37,9 @@ def make_app(routes=None, status=200, body=None, **kwargs):
 
 
 # source: https://aioftp.readthedocs.io/developer_tutorial.html?highlight=Test#server
-class MyServer(aioftp.Server):
+class TestServer(aioftp.Server):
     def __init__(self, host=None, port=None, users=None, **kwargs):
+        super(TestServer, self).__init__(users=users)
         self._host = host or "127.0.0.1"
         self._port = port or 8021
 
