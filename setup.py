@@ -9,6 +9,7 @@ dependencies = [
     "aioftp",
     "aiosqlite",
     "pydantic",
+    "pydantic-yaml",
     "watchfiles",
     "daemons",
     "mode-ng",

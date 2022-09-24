@@ -7,7 +7,6 @@ authors = ["Aristide <aristide.bamazi@imsp-uac.org>"]
 [tool.poetry.dependencies]
 python = "^3.10"
 pydantic-yaml = "^0.8.0"
-pytest-mock = "^3.8.2"
 # The depencicies is pinned to v0.15 because of this https://github.com/samuelcolvin/watchfiles/issues/177
 watchfiles = "0.15"
 aioftp = "^0.21.3"
@@ -29,6 +28,7 @@ black = "^22.6.0"
 pytest = "^7.1.2"
 flake8 = "^5.0.4"
 pytest-asyncio = "^0.19.0"
+pytest-mock = "^3.8.2"
 pre-commit = "^2.20.0"
 pydantic-factories = "^1.6.1"
 
