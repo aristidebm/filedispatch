@@ -17,23 +17,23 @@ routes = web.RouteTableDef()
 
 
 class BasicView(PydanticView):
-    dao: Dao = Dao()
+    ...
 
 
 @routes.view(r"/api/v1/logs", name="logs_list")
 class ListView(BasicView):
     # I don't if doing think like so (passing filters instead of key value pairs, key = Field()) will work.
     async def get(self, query_dict: QueryDict) -> r200[List[ReadOnlyLogEntry]]:
-        self.dao.connector = self.request.app["db"]
-        data = await self.dao.fetch_all(query_dict)
+        dao = self.request.app["dao"]
+        data = await dao.fetch_all(query_dict)
         data = [
             move_dict_key_to_top(json.loads(item.json()), key="id") for item in data
         ]
         return web.json_response(data, status=200, content_type=JSON_CONTENT_TYPE)
 
     async def post(self, data: WriteOnlyLogEntry) -> r201[ReadOnlyLogEntry]:
-        self.dao.connector = self.request.app["db"]
-        data = await self.dao.insert(data)
+        dao = self.request.app["dao"]
+        data = await dao.insert(data)
         data = json.loads(data.json())
         data = move_dict_key_to_top(data, "id")
         return web.json_response(data, status=201, content_type=JSON_CONTENT_TYPE)
@@ -44,8 +44,8 @@ class DetailView(BasicView):
     async def get(
         self, id: UUID = Field(..., description="Log ID"), /  # noqa W504
     ) -> Union[r200[ReadOnlyLogEntry], r404[Error]]:
-        self.dao.connector = self.request.app["db"]
-        data = await self.dao.fetch_one(pk=id)
+        dao = self.request.app["dao"]
+        data = await dao.fetch_one(pk=id)
         if not data:
             # HttpException class inherit from Response, so we can
             # pass content_type
@@ -56,6 +56,6 @@ class DetailView(BasicView):
         return web.json_response(data=data, status=200, content_type=JSON_CONTENT_TYPE)
 
     async def delete(self, id: UUID = Field(..., description="Log ID"), /) -> r204[Any]:
-        self.dao.connector = self.request.app["db"]
-        await self.dao.delete(pk=id)
+        dao = self.request.app["dao"]
+        await dao.delete(pk=id)
         raise HTTPNoContent(content_type=JSON_CONTENT_TYPE)

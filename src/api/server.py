@@ -30,6 +30,7 @@ from aiohttp_pydantic import oas
 
 from src.utils import PATH, BASE_DIR
 from .views import routes
+from .models import Dao
 
 __version__ = "0.1.0"
 
@@ -45,8 +46,9 @@ def make_app(db: PATH = None):
         title_spec="File Dispatch Monitoring Api",
         version_spec=__version__,
     )
-    app["db"] = partial(aiosqlite.connect, db or BASE_DIR / "db.sqlite3")
-
+    app["dao"] = Dao(
+        connector=partial(aiosqlite.connect, db or BASE_DIR / "db.sqlite3")
+    )
     return app
 
 
@@ -63,6 +65,7 @@ class WebServer(mode.Service):
         # https://github.com/aio-libs/aiohttp/blob/master/aiohttp/web.py#L447
         # https://github.com/aio-libs/aiohttp/issues/2608
         await super().on_started()
+        await self.runner.app["dao"].create_table()
         await self.run_app()
 
     async def on_stop(self) -> None:

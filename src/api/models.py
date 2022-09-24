@@ -35,6 +35,7 @@ from .queries import (
     ListLogEntriesQuery,
     RetrieveLogEntryQuery,
     DeleteLogEntryQuery,
+    DropTableQuery,
     LogEntry,
 )
 
@@ -134,6 +135,18 @@ class Dao:
         async with self.connector() as db:
             query = DeleteLogEntryQuery.get_sql()
             query = query % self.stringify({"id": pk})
+            await db.execute(query)
+            await db.commit()
+
+    async def create_table(self):
+        async with self.connector() as db:
+            query = CreateTableQuery.get_sql()
+            await db.execute(query)
+            await db.commit()
+
+    async def drop_table(self):
+        async with self.connector() as db:
+            query = DropTableQuery.get_sql()
             await db.execute(query)
             await db.commit()
 

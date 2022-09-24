@@ -18,16 +18,13 @@ BASE_URL = Path(__file__).parent.parent.parent
 @pytest_asyncio.fixture
 async def client(aiohttp_client):
     app = make_app(db=BASE_URL / "test_db.sqlite3")
-    connector = app["db"]
-    connection = await connector()
-    query = CreateTableQuery.get_sql()
-    cursor = await connection.execute(query)
+    dao = app["dao"]
+    await dao.create_table()
     clt = await aiohttp_client(app)
 
     yield clt
-    await connection.execute(DropTableQuery.get_sql())
-    await cursor.close()
-    await connection.close()
+
+    await dao.drop_table()
 
 
 @pytest.mark.asyncio
