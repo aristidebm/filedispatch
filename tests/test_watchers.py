@@ -158,3 +158,33 @@ class TestProvid:
             assert watcher.unprocessed.empty()
             await await_scheduled_task()
             mock.acquire.assert_called_once_with(filename, destination)
+
+    @pytest.mark.asyncio
+    async def test_service_does_not_crash_if_no_web_app(
+        self, config, mocker, await_scheduled_task
+    ):
+        # mocks
+
+        source = Path("/parent") / "mnt"
+
+        destination = source / "video"
+        filename = source / f"tmp-{uuid.uuid4()}.mp4"  # change in a subdirectory
+
+        mocker.patch(
+            "src.watchers.Queue.get",
+            side_effect=[(filename, destination), Exception],
+        )
+        mocker.patch("src.watchers.FileWatcher.sleep")  # don't want to really sleep
+
+        # mock the processor
+        mock = mocker.Mock()
+        base_mock = mocker.Mock(return_value=mock)
+        mock.acquire = mocker.Mock(return_value=None)
+        mock.maybe_start = mocker.AsyncMock()
+
+        mocker.patch("src.watchers.FileWatcher._get_processor", new=base_mock)
+
+        async with FileWatcher(config, no_web_app=True) as watcher:
+            assert watcher.unprocessed.empty()
+            await await_scheduled_task()
+            mock.acquire.assert_called_once_with(filename, destination)

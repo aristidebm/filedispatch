@@ -25,7 +25,6 @@ from .utils import (
     FtpUrl,
     StatusEnum,
 )
-from .notifiers import Notifier
 
 copyfile = wrap(shutil.copyfile)
 
@@ -71,19 +70,18 @@ class BaseStorageProcessor(mode.Service):
 
     fancy_name: str = "Base Processor"
 
-    def __init__(self, with_web_app=True, **kwargs):
+    def __init__(self, notifier=None, with_web_app=True, **kwargs):
         self._with_web_app = with_web_app
+        self._notifier = notifier
         super().__init__(**kwargs)
-
-    def __post_init__(self):
-        if self.with_web_app:
-            self.add_dependency(self.notifier)
 
     async def on_start(self) -> None:
         await super().on_start()
         # define before background task start since the use Queues
         # for the matter of safety https://mode.readthedocs.io/en/latest/userguide/services.html#ordering
         self.unprocessed: Queue[Tuple[PATH, PATH]] = Queue()
+        if self.with_web_app:
+            self.add_dependency(self.notifier)
 
     async def _notify(
         self, filename, destination, status, reason=None, delete=False, **kwargs
@@ -97,7 +95,7 @@ class BaseStorageProcessor(mode.Service):
         except error_wrappers.ValidationError as exp:
             self.logger.debug(exp)
         else:
-            # start notifier on demand
+            # start notifier on demand (because notifier isn't added using running add_runtime_dependencies)
             await self.notifier.maybe_start()
             self.notifier.acquire(payload)
             if delete and status != StatusEnum.FAILED:
@@ -106,9 +104,13 @@ class BaseStorageProcessor(mode.Service):
                 except OSError as exp:
                     self.logger.debug(exp)
 
-    @cached_property
+    @property
     def notifier(self):
-        return Notifier()
+        return self._notifier
+
+    @notifier.setter
+    def notifier(self, notifier):
+        self._notifier = notifier
 
     @property
     def with_web_app(self):

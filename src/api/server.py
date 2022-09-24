@@ -51,13 +51,10 @@ def make_app(db: PATH = None):
 
 
 class WebServer(mode.Service):
-    host: str = "127.0.0.1"
-    port: int = 3001
-
-    def __init__(self, host=None, port=None, **kwargs):
+    def __init__(self, host, port, **kwargs):
         super().__init__(**kwargs)
-        self.host = host or self.host
-        self.port: int = port or self.port
+        self.host = host
+        self.port: int = port
 
     async def on_started(self) -> None:
         # web.run_app is not only a blocking API (to be run only on synchronous environment, wich is not our case), but

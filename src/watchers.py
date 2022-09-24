@@ -12,6 +12,7 @@ import aiofiles
 
 from src.api.server import WebServer
 from .processors import LocalStorageProcessor, FtpStorageProcessor, HttpStorageProcessor
+from .notifiers import Notifier
 from .utils import get_protocol, PATH
 from .config import Settings
 
@@ -34,9 +35,6 @@ class BaseWatcher(mode.Service):
 
 
 class FileWatcher(BaseWatcher):
-
-    server: WebServer = None
-
     def __init__(
         self,
         config: Settings,
@@ -55,35 +53,37 @@ class FileWatcher(BaseWatcher):
         self.log_file = log_file
         self.log_level = log_level
 
+        if not self.no_web_app:
+            self.web_app_port = self.web_app_port or 3001
+            self.web_app_host = self.web_app_host or "127.0.0.1"
+
     async def on_start(self):
         await super().on_start()
         self.unprocessed: Queue[Tuple[PATH, PATH]] = Queue()
-        if (
-            not self.no_web_app
-        ):  # The server will be closed automatically when FileWatcher is suspended
-            # since the server is a runtime dependency
+        if not self.no_web_app:
+            # The server will be closed automatically when FileWatcher is suspended
+            # since each services suspend all its depencencies before shutdown.
             asyncio.create_task(self.add_runtime_dependency(self.server))
         else:
             self.logger.info("The web-app is disabled.")
 
-    # NOTE: mode take already care of graceful shutdown.
-    # async def on_stop(self) -> None:
-    #     # stop processor
-    #     for processor in self.PROCESSORS_REGISTRY.values():
-    #         logger.info(f"Stopping [{processor.fancy_name.lower()}] ...")
-    #         await processor.stop()
-    #
-    #     if self.server:
-    #         self.server.stop()
-    #
-    #     await super().on_stop()
-
     def on_init_dependencies(self):
         super().on_init_dependencies()
+        processors = self._init_processors()
+        return processors
+
+    def _init_processors(self) -> list[mode.ServiceT]:
         processors = []
         for p in self.PROCESSORS_REGISTRY.values():
             p.with_web_app = not self.no_web_app
+            if not self.no_web_app:
+                # FIXME: Perhaps only one Notify is suffisent ? It can be interesting
+                #  to consider if we are sure of less traffic between processors and notifier.
+                p.notifier = Notifier(
+                    host=self.web_app_host, port=self.web_app_port, scheme="http"
+                )
             processors.append(p)
+
         return processors
 
     async def on_started(self) -> None:
@@ -108,7 +108,7 @@ class FileWatcher(BaseWatcher):
 
     @functools.cached_property
     def server(self):
-        return WebServer()
+        return WebServer(host=self.web_app_host, port=self.web_app_port)
 
     @mode.Service.task
     async def _watch(self, config=None):
