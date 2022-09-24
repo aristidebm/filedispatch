@@ -14,19 +14,18 @@ import mode
 import aiohttp
 import aioftp
 import aiofiles
-from aiofiles.os import wrap
+import aiofiles.os as aiofiles_os
 from aiohttp_retry import RetryClient
-from aiohttp.client_exceptions import ClientError
 
 from .utils import (
     PATH,
-    get_protocol,
     get_payload,
     FtpUrl,
     StatusEnum,
 )
 
-copyfile = wrap(shutil.copyfile)
+copyfile = aiofiles_os.wrap(shutil.copyfile)
+unlink = aiofiles_os.wrap(os.unlink)
 
 
 # class RemoteStorageMixin:
@@ -95,12 +94,12 @@ class BaseStorageProcessor(mode.Service):
         except error_wrappers.ValidationError as exp:
             self.logger.debug(exp)
         else:
-            # start notifier on demand (because notifier isn't added using running add_runtime_dependencies)
+            # Start notifier on demand (because notifier isn't added using running add_runtime_dependencies)
             await self.notifier.maybe_start()
             self.notifier.acquire(payload)
             if delete and status != StatusEnum.FAILED:
                 try:
-                    await aiofiles.os.unlink(filename)
+                    await unlink(filename)
                 except OSError as exp:
                     self.logger.debug(exp)
 
@@ -134,9 +133,10 @@ class LocalStorageProcessor(BaseStorageProcessor):
 
     @mode.Service.task
     async def _process(self, **kwargs):
-        filename, destination = await self.unprocessed.get()
-        asyncio.create_task(self._move(filename, destination, **kwargs))
-        await self.sleep(1.0)
+        while not self.should_stop:
+            filename, destination = await self.unprocessed.get()
+            asyncio.create_task(self._move(filename, destination, **kwargs))
+            await self.sleep(1.0)
 
     async def _move(self, filename, destination, **kwargs):
         try:
@@ -179,27 +179,18 @@ class HttpStorageProcessor(BaseStorageProcessor):
                 reason = " ".join([str(arg) for arg in exp.args])
                 await self._notify(filename, destination, StatusEnum.FAILED, reason)
                 return
-            # keep default aiohttp_retry settings.
-            async with RetryClient(raise_for_status=True) as client:
-                try:
-                    async with client.post(destination, data=writer) as response:
-                        if response.ok:
-                            await self._notify(
-                                filename, destination, StatusEnum.SUCCEEDED
-                            )
-                        else:
-                            reason = await response.text()
-                            reason = f"{response.status} {response.reason}\n\n{reason}"
-                            self.logger.debug(reason)
-                            await self._notify(
-                                filename, destination, StatusEnum.FAILED, reason
-                            )
-                except ClientError as exp:
-                    self.logger.debug(exp)
-                    # FIXME: args can be empty. What if we send all the exception to the notification api like so
-                    #  f"{exp!r}" ?
-                    reason = " ".join([str(arg) for arg in exp.args])
-                    await self._notify(filename, destination, StatusEnum.FAILED, reason)
+
+            async with RetryClient() as client:
+                async with client.post(destination, data=writer) as response:
+                    if response.ok:
+                        await self._notify(filename, destination, StatusEnum.SUCCEEDED)
+                    else:
+                        reason = await response.text()
+                        reason = f"{response.status} {response.reason}\n\n{reason}"
+                        self.logger.debug(reason)
+                        await self._notify(
+                            filename, destination, StatusEnum.FAILED, reason
+                        )
 
     # https://docs.aiohttp.org/en/stable/client_quickstart.html#streaming-uploads
     async def _send_chunk(self, filename):  # useful for big files

@@ -38,7 +38,7 @@ setup(
     python_requires=">=3.10",
     entry_points={
         "console_scripts": [
-            "sendria = src.cli:main",
+            "filedispatch = src.cli:main",
         ],
     },
     install_requires=dependencies,

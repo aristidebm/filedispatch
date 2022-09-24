@@ -18,7 +18,9 @@ class WriteOnlyLogEntry(BaseModel):
     processor: constr(max_length=255)
     protocol: ProtocolEnum
     status: StatusEnum
-    size: Optional[constr(regex=r"^\d+ (KB|MB|GB|TB)$")] = Field(None)  # noqa F722
+    size: Optional[constr(regex=r"^\d*\.?\d* (KB|MB|GB|TB)$")] = Field(  # noqa F722
+        None
+    )
     byte_size: Optional[Decimal] = None
     reason: Optional[str] = None
 
@@ -70,10 +72,6 @@ class QueryDict(Group):
         None,
         description="Ordering Field, prefix the field name with minus(-) to order in DESC",
     )
-
-
-# class AnyModel(BaseModel):
-#     __root__ = Any
 
 
 class Error(BaseModel):

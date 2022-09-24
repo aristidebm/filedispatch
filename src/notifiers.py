@@ -43,19 +43,10 @@ class Notifier(mode.Service):
             await self.sleep(1.0)
 
     async def _send(self, payload, **kwargs):
-        async with RetryClient(
-            raise_for_status=True, headers={"content-type": JSON_CONTENT_TYPE}
-        ) as client:
+        async with RetryClient() as client:
             try:
-                async with client.post(self.url, data=payload) as response:
-                    if response.ok:
-                        self.logger.debug(
-                            f"Payload {json.dumps(payload, indent=2)} is sent to the web"
-                        )
-                    else:
-                        self.logger.debug(
-                            f"Cannot send the payload {json.dumps(payload, indent=2)} to the server."
-                        )
+                self.logger.debug(f"\n{json.dumps(payload, indent=2)}")
+                await client.post(self.url, json=payload)
             except ClientError as exp:
-                self.logger.debug(exp)
+                self.logger.exception(exp)
                 return

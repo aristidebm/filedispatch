@@ -1,10 +1,11 @@
+import json
 import math
 import os
 from enum import Enum
 from typing import Union
 from pathlib import Path
 
-import aiofiles
+import aiofiles.os as aiofiles_os
 from pydantic import (
     parse_obj_as,
     HttpUrl,
@@ -79,9 +80,9 @@ def clean_url(url: PATH) -> PATH:
 
 async def get_filesize(filename):
     suffix = ["KB", "MB", "GB", "TB"]
-    quot = byte_size = await aiofiles.os.path.getsize(filename)
+    quot = byte_size = await aiofiles_os.path.getsize(filename)
     size = None
-    idx = -1
+    idx = -2
 
     while math.floor(quot):
         size, quot = quot, quot / 1024
@@ -91,9 +92,9 @@ async def get_filesize(filename):
             break
 
     if size:
-        size = f"{size: .2f} {suffix[idx]}"
+        size = f"{size:.2f} {suffix[idx]}"
     else:
-        size = f"{byte_size / 1024: .2f} {suffix[0]}"
+        size = f"{byte_size / 1024:.2f} {suffix[0]}"
 
     return size, byte_size
 
@@ -110,18 +111,20 @@ async def get_payload(filename, destination, status, processor, reason=None):
         _size = None
         _byte_size = None
 
-    return src.schema.WriteOnlyLogEntry(
-        filename=os.path.basename(filename),
-        destination=str(destination),
-        source=os.path.dirname(filename),
-        extension=extension,
-        processor=processor,
-        protocol=ProtocolEnum[get_protocol(destination)],
-        status=status,
-        size=_size,
-        byte_size=_byte_size,
-        reason=reason,
-    ).dict()
+    return json.loads(
+        src.schema.WriteOnlyLogEntry(
+            filename=os.path.basename(filename),
+            destination=str(destination),
+            source=os.path.dirname(filename),
+            extension=extension,
+            processor=processor,
+            protocol=ProtocolEnum[get_protocol(destination)],
+            status=status,
+            size=_size,
+            byte_size=_byte_size,
+            reason=reason,
+        ).json()
+    )
 
 
 def move_dict_key_to_top(data, key):
