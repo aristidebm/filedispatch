@@ -74,7 +74,7 @@ def parse_argv(argv: list) -> argparse.Namespace:
         "-x", "--exit", action="store_true", help="Sends SIGTERM to the running daemon"
     )
     parser.add_argument(
-        "--no-web-app",
+        "--no-webapp",
         help="Whether to launch web app",
         action="store_true",
         default=None,
@@ -139,7 +139,7 @@ def main():
         port=args.port,
         log_file=args.log_file,
         log_level=args.log_level,
-        no_web_app=args.no_web_app,
+        no_web_app=args.no_webapp,
     )
 
     if args.daemon or args.exit:
