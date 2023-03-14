@@ -120,8 +120,15 @@ class BaseStorageProcessor(mode.Service):
         self._with_web_app = value
 
     @abc.abstractmethod
-    async def _process(self, **kwargs):
+    async def process(self, filename, destination, **kwargs):
         pass
+
+    @mode.Service.task
+    async def _consume(self, **kwargs):
+        while not self.should_stop:
+            filename, destination = await self.unprocessed.get()
+            asyncio.create_task(self.process(filename, destination, **kwargs))
+            await self.sleep(1.0)
 
     def acquire(self, filename: PATH, destination: PATH, **kwargs) -> None:
         asyncio.create_task(self.unprocessed.put((filename, destination)))
@@ -131,14 +138,7 @@ class LocalStorageProcessor(BaseStorageProcessor):
 
     fancy_name = "Local processor"
 
-    @mode.Service.task
-    async def _process(self, **kwargs):
-        while not self.should_stop:
-            filename, destination = await self.unprocessed.get()
-            asyncio.create_task(self._move(filename, destination, **kwargs))
-            await self.sleep(1.0)
-
-    async def _move(self, filename, destination, **kwargs):
+    async def process(self, filename, destination, **kwargs):
         try:
             basename = os.path.basename(filename)
             await copyfile(filename, os.path.join(destination, basename))
@@ -146,7 +146,6 @@ class LocalStorageProcessor(BaseStorageProcessor):
             asyncio.create_task(
                 self._notify(filename, destination, StatusEnum.SUCCEEDED, delete=True)
             )
-
         except OSError as exp:
             self.logger.exception(exp)
             reason = " ".join([str(arg) for arg in exp.args])
@@ -159,14 +158,7 @@ class HttpStorageProcessor(BaseStorageProcessor):
 
     fancy_name = "HTTP processor"
 
-    @mode.Service.task
-    async def _process(self, **kwargs):
-        while not self.should_stop:
-            filename, destination = await self.unprocessed.get()
-            asyncio.create_task(self._send(filename, destination, **kwargs))
-            await self.sleep(1.0)
-
-    async def _send(self, filename, destination, **kwargs):
+    async def process(self, filename, destination, **kwargs):
         # https://docs.aiohttp.org/en/stable/multipart.html#sending-multipart-requests
 
         with aiohttp.MultipartWriter() as writer:
@@ -205,14 +197,7 @@ class FtpStorageProcessor(BaseStorageProcessor):
 
     fancy_name = "FTP processor"
 
-    @mode.Service.task
-    async def _process(self, **kwargs):
-        while not self.should_stop:
-            filename, destination = await self.unprocessed.get()
-            asyncio.create_task(self._send(filename, destination, **kwargs))
-            await self.sleep(1.0)
-
-    async def _send(self, filename, destination, **kwargs):
+    async def process(self, filename, destination, **kwargs):
         try:
             scheme = parse_obj_as(FtpUrl, destination)
         except error_wrappers.ValidationError as exp:

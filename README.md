@@ -153,3 +153,5 @@ folders:
 - [ ] Look for code to clean and refactor.
 - [ ] Reformat the config file to make it more generic to support, excluding some files or directories using full path or pattern.
 - [ ] Clean commit on main branch and update the CHANGELOG.
+- [ ] Add information on the file creation and last update dates.
+- [ ] Treat (filename, destination) as a Message (Add a Message Dataclass)
