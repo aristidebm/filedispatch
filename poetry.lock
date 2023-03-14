@@ -402,12 +402,12 @@ optional = false
 python-versions = ">=3.6"
 
 [[package]]
-name = "mode-ng"
-version = "0.4.0"
+name = "mode-streaming"
+version = "0.3.5"
 description = "AsyncIO Service-based programming."
 category = "main"
 optional = false
-python-versions = ">=3.10"
+python-versions = ">=3.7"
 
 [package.dependencies]
 colorlog = ">=2.9.0"
@@ -415,7 +415,7 @@ croniter = ">=0.3.16"
 mypy-extensions = "*"
 
 [package.extras]
-eventlet = ["aioeventlet (>=0.5.1,<0.6.0)", "dnspython"]
+eventlet = ["dnspython", "faust-aioeventlet"]
 gevent = ["aiogevent (>=0.2,<1.0)"]
 uvloop = ["uvloop (>=0.8.1)"]
 
@@ -809,7 +809,7 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10"
-content-hash = "26bb205bfe89b700745e7261f5e3677caa88b38fb831e9af31b261231692a30e"
+content-hash = "9c4b8316b96839c1b6cf29447b707daa119b66c1c28fc91bcf7c96dc2fa69f39"
 
 [metadata.files]
 aioconsole = [
@@ -1344,9 +1344,9 @@ mccabe = [
     {file = "mccabe-0.7.0-py2.py3-none-any.whl", hash = "sha256:6c2d30ab6be0e4a46919781807b4f0d834ebdd6c6e3dca0bda5a15f863427b6e"},
     {file = "mccabe-0.7.0.tar.gz", hash = "sha256:348e0240c33b60bbdf4e523192ef919f28cb2c3d7d5c7794f74009290f236325"},
 ]
-mode-ng = [
-    {file = "mode-ng-0.4.0.tar.gz", hash = "sha256:eb88119e11fe75bd50f94961131098697a243669f4d0800da2838ad472206782"},
-    {file = "mode_ng-0.4.0-py3-none-any.whl", hash = "sha256:56841c3c1fbacf1541b60450f2b15b8558d6e9c6f1a871cbaa6fdbdfb0df4fbd"},
+mode-streaming = [
+    {file = "mode-streaming-0.3.5.tar.gz", hash = "sha256:b9ed989541925a949dec236ff81a1362f93c5f9474ec7f26225f5685170e8888"},
+    {file = "mode_streaming-0.3.5-py2.py3-none-any.whl", hash = "sha256:689b8e74f1d72884658a090ea0ed20527a22817ecc922bdc0e1c62d4919d349f"},
 ]
 multidict = [
     {file = "multidict-6.0.4-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:0b1a97283e0c85772d613878028fec909f003993e1007eafa715b24b377cb9b8"},
