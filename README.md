@@ -108,7 +108,7 @@ folders:
 ## Main dependencies
 
 + [pydantic](https://pypi.org/project/pydantic/)
-+ [mode-ng](https://pypi.org/project/mode-ng/)
++ [mode-streaming](https://pypi.org/project/mode-streaming/)
 + [watchfiles](https://pypi.org/project/watchfiles/)
 + [aiohttp](https://docs.aiohttp.org/en/stable/)
 + [aioftp](https://pypi.org/project/aioftp/)
@@ -143,3 +143,13 @@ folders:
 - [ ] ADD Support to text-mining and machine-learning classification algorithm for better experience.
 - [ ] ADD a front-end to the log's API.
 - [ ] ADD Support to Chart Analysis to view daily, weekly and monthly analysis curve of ours activities.
+
+
+#### TODOS
+
+- [ ] Rewrite tests. currently unit tests looks more like integration tests than unit tests (lot of components mocking). We want to fix that.
+- [ ] Rewrite config parsing components to let it behave as a service we request configuration from.
+- [ ] Support project level log configuration (in a yaml file)
+- [ ] Look for code to clean and refactor.
+- [ ] Reformat the config file to make it more generic to support, excluding some files or directories using full path or pattern.
+- [ ] Clean commit on main branch and update the CHANGELOG.
