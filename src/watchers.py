@@ -176,8 +176,8 @@ class FileWatcher(BaseWatcher):
                 self,
                 debug=bool(log_level == logging.DEBUG),
                 daemon=True,
-                log_level=log_level,
-                log_file=self.log_file,
+                loglevel=log_level,
+                logfile=self.log_file,
                 redirect_stdouts=False,
             )
             worker.execute_from_commandline()
