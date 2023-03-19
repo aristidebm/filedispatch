@@ -100,7 +100,6 @@ class TestLocalStorageProcessor:
     async def test_payload_is_sent_to_notifier(
         self, mocker, config, filesystem, await_scheduled_task
     ):
-
         source = Path(filesystem.name) / "mnt"
         destination = source / "video"
         filename = source / f"tmp-{uuid.uuid4()}.mp4"
@@ -153,7 +152,6 @@ class TestHttpStorageProcessor:
     async def test_http_storage_processor_server_down_failure(
         self, mocker, config, filesystem, aiohttp_server, await_scheduled_task
     ):
-
         PORT = 8000
 
         await aiohttp_server(make_app(status=500), port=PORT)
@@ -192,7 +190,6 @@ class TestHttpStorageProcessor:
     async def test_http_storage_process_the_file(
         self, mocker, config, filesystem, aiohttp_server, await_scheduled_task
     ):
-
         PORT = 8000
 
         await aiohttp_server(make_app(status=200), port=PORT)

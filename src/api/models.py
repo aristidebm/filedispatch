@@ -116,7 +116,6 @@ class Dao:
                     return el
 
     async def insert(self, data: WriteOnlyLogEntry) -> ReadOnlyLogEntry:
-
         data_json = json.loads(data.json())
         async with self.connector() as db:
             query = CreateLogEntryQuery.get_sql()

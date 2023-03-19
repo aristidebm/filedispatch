@@ -31,7 +31,6 @@ class ReadOnlyLogEntry(WriteOnlyLogEntry):
 
 
 class QueryDict(Group):
-
     status: Optional[StatusEnum] = Field(None, description="Filter logs by status")
 
     destination: Optional[str] = Field(

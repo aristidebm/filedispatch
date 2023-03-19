@@ -27,44 +27,7 @@ from .utils import (
 copyfile = aiofiles_os.wrap(shutil.copyfile)
 unlink = aiofiles_os.wrap(os.unlink)
 
-
-# class RemoteStorageMixin:
-#     # FIXME: Make the function more generic.
-#     @classmethod
-#     def produce(cls, method):
-#         f = getattr(cls, method, None)
-#
-#         if not callable(f):
-#             return
-#
-#         @wraps(f)
-#         async def wrapper(self, filename: PATH, destination: PATH, **kwargs):
-#             await self.unprocessed.put((filename, destination))
-#             await f(self, filename, destination, **kwargs)
-#             await self.unprocessed.task_done()
-#
-#         setattr(cls, wrapper.__name__, wrapper)
-
-# Resources
-# https://phil.tech/2016/http-rest-api-file-uploads/
-# https://developer.mozilla.org/en-US/docs/Learn/Common_questions/Upload_files_to_a_web_serverNever
-# Never Initial asyncio Queues outside of the running event loop, other they will loop.get_event_loop and create
-# a new loop, it can save you for long time debuging (https://stackoverflow.com/a/53724990/13837279). I have intialized
-# Queues inside the __intit__ method with is not async method and it take me long google search to figure it out.
-
-
-# def check_web_app(f):
-#     @functools.wraps(f)
-#     async def wrapper(self, *args, **kwargs):
-#         if not self._running_web_app:
-#             return
-#         return await f(self, *args, **kwargs)
-#
-#     return wrapper
-
-
 class BaseStorageProcessor(mode.Service):
-
     abstract = True
 
     fancy_name: str = "Base Processor"
@@ -135,7 +98,6 @@ class BaseStorageProcessor(mode.Service):
 
 
 class LocalStorageProcessor(BaseStorageProcessor):
-
     fancy_name = "Local processor"
 
     async def process(self, filename, destination, **kwargs):
@@ -155,7 +117,6 @@ class LocalStorageProcessor(BaseStorageProcessor):
 
 
 class HttpStorageProcessor(BaseStorageProcessor):
-
     fancy_name = "HTTP processor"
 
     async def process(self, filename, destination, **kwargs):
@@ -194,7 +155,6 @@ class HttpStorageProcessor(BaseStorageProcessor):
 
 
 class FtpStorageProcessor(BaseStorageProcessor):
-
     fancy_name = "FTP processor"
 
     async def process(self, filename, destination, **kwargs):

@@ -10,7 +10,7 @@ pytestmark = pytest.mark.watcher
 
 
 @pytest.fixture(autouse=True)
-def mock_processors(mocker):
+def mock_consumeors(mocker):
     # Mock background tasks (since their running forever and we are going to wait them manually)
 
     # spec=True, cause a check is done in library to make sure they are dealing with a ServiceTask
@@ -81,7 +81,6 @@ class TestWatch:
     async def test_ignore_new_directories_and_symlinks(
         self, mocker, config, filesystem, await_scheduled_task, mock_isfile, mock_awatch
     ):
-
         queue_put = mocker.patch("src.watchers.Queue.put")
 
         dir_ = Path(filesystem.name) / "mnt"
@@ -94,7 +93,6 @@ class TestWatch:
         mock_awatch(changes)
 
         async with FileWatcher(config=config) as watcher:
-
             assert watcher.unprocessed.empty()
             await await_scheduled_task()
             # Make sure the file is added to the processing queue
@@ -104,7 +102,6 @@ class TestWatch:
     async def test_ignore_source_subdirectories_changes(
         self, mocker, config, filesystem, await_scheduled_task, mock_isfile, mock_awatch
     ):
-
         queue_put = mocker.patch("src.watchers.Queue.put")
 
         dir_ = Path(filesystem.name) / "mnt"
