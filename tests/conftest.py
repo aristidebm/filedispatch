@@ -52,12 +52,13 @@ def filesystem():  # FIXME: It can be handy to rely on pytest tmp_path fixture
     yield tempdir
     tempdir.cleanup()
 
+
 @pytest.fixture(scope="session")
 def event_loop():
     policy = asyncio.get_event_loop_policy()
     loop = policy.new_event_loop()
     # Enable debugging
-    loop.set_debug(True)
+    # loop.set_debug(True)
     yield loop
     loop.close()
 
