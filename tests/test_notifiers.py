@@ -20,9 +20,9 @@ def mock_processors(mocker):
     # spec=True, cause a check is done in library to make sure they are dealing with a ServiceTask
     mocker.patch("src.watchers.FileWatcher._watch", spec=True)
     mocker.patch("src.watchers.FileWatcher._provide", spec=True)
-    mocker.patch("src.processors.HttpStorageProcessor._process", spec=True)
-    mocker.patch("src.processors.LocalStorageProcessor._process", spec=True)
-    mocker.patch("src.processors.FtpStorageProcessor._process", spec=True)
+    mocker.patch("src.processors.BaseProcessor._consume", spec=True)
+    # mocker.patch("src.processors.LocalStorageProcessor._consume", spec=True)
+    # mocker.patch("src.processors.FtpStorageProcessor._consume", spec=True)
     mocker.patch("src.processors.HttpStorageProcessor.on_start", spec=True)
     mocker.patch("src.processors.FtpStorageProcessor.on_start", spec=True)
     mocker.patch("aiofiles.os.path.isfile", returned_value=True)

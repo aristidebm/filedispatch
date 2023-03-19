@@ -14,9 +14,9 @@ def mock_processors(mocker):
     # Mock background tasks (since their running forever and we are going to wait them manually)
 
     # spec=True, cause a check is done in library to make sure they are dealing with a ServiceTask
-    mocker.patch("src.processors.LocalStorageProcessor._process", spec=True)
-    mocker.patch("src.processors.HttpStorageProcessor._process", spec=True)
-    mocker.patch("src.processors.FtpStorageProcessor._process", spec=True)
+    mocker.patch("src.processors.LocalStorageProcessor._consume", spec=True)
+    mocker.patch("src.processors.HttpStorageProcessor._consume", spec=True)
+    mocker.patch("src.processors.FtpStorageProcessor._consume", spec=True)
     mocker.patch("src.notifiers.Notifier._notify", spec=True)
     mocker.patch("aiofiles.os.path.isfile", returned_value=True)
 
