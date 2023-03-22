@@ -10,7 +10,7 @@ from pydantic import (
     parse_obj_as,
     HttpUrl,
     FileUrl,
-    stricturl,
+    AnyUrl,
     error_wrappers,
 )
 
@@ -27,7 +27,18 @@ __all__ = [
     "move_dict_key_to_top",
 ]
 
-FtpUrl = stricturl(allowed_schemes=["ftp", "sftp"])
+
+class FtpUrl(AnyUrl):
+    # https://docs.bmc.com/docs/bcm126/en/ftp-specific-scheme-738017959.html
+    allowed_schemes = ["ftp", "sftp"]
+    max_length = 2083  # url maximum length.
+    hidden_parts = {"port"}  # don't include default port in url built.
+
+    @staticmethod
+    def get_default_parts(parts):
+        return {"port": "21" if parts["scheme"] == "ftp" else "22"}
+
+
 FIELDS = dict(file=FileUrl, http=HttpUrl, ftp=FtpUrl)
 PATH = Union[str, Path]
 BASE_DIR = Path(__file__).resolve().parent.parent

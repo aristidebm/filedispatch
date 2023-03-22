@@ -27,6 +27,7 @@ from .utils import (
 copyfile = aiofiles_os.wrap(shutil.copyfile)
 unlink = aiofiles_os.wrap(os.unlink)
 
+
 class BaseStorageProcessor(mode.Service):
     abstract = True
 
@@ -83,7 +84,7 @@ class BaseStorageProcessor(mode.Service):
         self._with_web_app = value
 
     @abc.abstractmethod
-    async def process(self, filename, destination, **kwargs):
+    async def process(self, filename, destination, delete=False, **kwargs):
         pass
 
     @mode.Service.task
@@ -100,13 +101,14 @@ class BaseStorageProcessor(mode.Service):
 class LocalStorageProcessor(BaseStorageProcessor):
     fancy_name = "Local processor"
 
-    async def process(self, filename, destination, **kwargs):
+    async def process(self, filename, destination, delete=False, **kwargs):
+
         try:
             basename = os.path.basename(filename)
             await copyfile(filename, os.path.join(destination, basename))
             self.logger.info(f"File {filename} moved to {destination}")
             asyncio.create_task(
-                self._notify(filename, destination, StatusEnum.SUCCEEDED, delete=True)
+                self._notify(filename, destination, StatusEnum.SUCCEEDED, delete=delete)
             )
         except OSError as exp:
             self.logger.exception(exp)
@@ -119,7 +121,7 @@ class LocalStorageProcessor(BaseStorageProcessor):
 class HttpStorageProcessor(BaseStorageProcessor):
     fancy_name = "HTTP processor"
 
-    async def process(self, filename, destination, **kwargs):
+    async def process(self, filename, destination, delete=False, **kwargs):
         # https://docs.aiohttp.org/en/stable/multipart.html#sending-multipart-requests
 
         with aiohttp.MultipartWriter() as writer:
@@ -157,25 +159,31 @@ class HttpStorageProcessor(BaseStorageProcessor):
 class FtpStorageProcessor(BaseStorageProcessor):
     fancy_name = "FTP processor"
 
-    async def process(self, filename, destination, **kwargs):
+    async def process(self, filename, destination, delete=False, **kwargs):
+        # FIXME: move destination validation to the top level class and leave.
+
         try:
             scheme = parse_obj_as(FtpUrl, destination)
         except error_wrappers.ValidationError as exp:
-            self.logger.exception(exp)
-            reason = exp.json()
+            self.logger.warning(exp)
+            self.logger.debug(exp, stack_info=True)
+            reason = f"The destination path « {destination} » is not valid ftp url."
             await self._notify(filename, destination, StatusEnum.FAILED, reason)
             return
-        else:
-            if not all([scheme.host, scheme.port, scheme.user, scheme.password]):
-                reason = f"Missing connection information (host, port, username, password) in {destination}"
-                await self._notify(filename, destination, StatusEnum.FAILED, reason)
-                return
 
         async with aioftp.Client.context(
             scheme.host, port=scheme.path, user=scheme.user, password=scheme.password
         ) as client:
             try:
-                await client.upload(filename)
+                await client.upload(filename, destination)
+                await self._notify(filename, destination, StatusEnum.SUCCEEDED)
             except aioftp.StatusCodeError as exp:
+                self.logger.warning(exp)
+                self.logger.debug(exp, stack_info=True)
                 reason = f"Received {exp.received_codes}\n\nExpected{exp.expected_codes}\n\n{exp.info}"
+                await self._notify(filename, destination, StatusEnum.FAILED, reason)
+            except aioftp.AIOFTPException as exp:
+                self.logger.warning(exp)
+                self.logger.debug(exp, stack_info=True)
+                reason = f"{exp}"
                 await self._notify(filename, destination, StatusEnum.FAILED, reason)

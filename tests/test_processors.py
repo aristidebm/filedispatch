@@ -1,413 +1,296 @@
-import asyncio
-import stat
+import io
 import uuid
+from unittest import mock
 
+import aiofiles
+import aioftp
 import pytest
-import os
-from pathlib import Path
 
-
-from src.watchers import FileWatcher
+from src.processors import (
+    LocalStorageProcessor,
+    HttpStorageProcessor,
+    FtpStorageProcessor,
+)
 from src.utils import StatusEnum
-
-from .base import contains, make_app
 
 
 pytestmark = pytest.mark.process
 
 
+def get_notifier_mock():
+    notifier = mock.MagicMock()
+    notifier.acquire = mock.Mock()
+    notifier.maybe_start = mock.AsyncMock()
+    notifier.stop = mock.AsyncMock()
+    return mock.PropertyMock(return_value=notifier)
+
+
 class TestLocalStorageProcessor:
-    @pytest.fixture(autouse=True)
-    def mock_processors(self, mocker):
-        # Mock background tasks (since their running forever and we are going to wait them manually)
-        # spec=True, cause a check is done in library to make sure they are dealing with a ServiceTask
-        mocker.patch("src.watchers.FileWatcher._watch", spec=True)
-        mocker.patch("src.watchers.FileWatcher._provide", spec=True)
-        mocker.patch("src.processors.HttpStorageProcessor._consume", spec=True)
-        mocker.patch("src.processors.FtpStorageProcessor._consume", spec=True)
-        mocker.patch("src.notifiers.Notifier._notify", spec=True)
-        mocker.patch("aiofiles.os.path.isfile", returned_value=True)
-
     @pytest.mark.asyncio
-    async def test_local_storage_processor_succeed_processing(
-        self, mocker, config, filesystem, await_scheduled_task
+    async def test_local_storage_processing_succeeded(
+        self, mocker, await_scheduled_task
     ):
-        source = Path(filesystem.name) / "mnt"
-        destination = source / "video"
-        filename = source / f"tmp-{uuid.uuid4()}.mp4"
-
-        mock_get = mocker.patch(
-            "src.processors.Queue.get", side_effect=[(filename, destination)]
+        sut = LocalStorageProcessor()
+        filename, destination = "filename.mp4", "/tmp/destination"
+        copyfile = mocker.patch("src.processors.copyfile")
+        notify = mocker.patch("src.processors.LocalStorageProcessor._notify")
+        await sut.process(filename, destination)
+        copyfile.assert_awaited_once()
+        assert copyfile.await_args[0] == (
+            filename,
+            f"{destination}/{filename}",
+        )
+        await await_scheduled_task()
+        notify.assert_awaited_once()
+        assert notify.await_args[0] == (
+            filename,
+            destination,
+            StatusEnum.SUCCEEDED,
         )
 
-        mock_copyfile = mocker.patch("src.processors.copyfile", returned_value=None)
-
-        mock_notify = mocker.patch("src.processors.LocalStorageProcessor._notify")
-
-        async with FileWatcher(config=config):
-            await await_scheduled_task()
-
-            mock_get.assert_awaited()
-            mock_copyfile.assert_awaited_once_with(
-                Path(filename), str(destination / filename.name)
-            )
-            mock_notify.assert_awaited_once_with(
-                Path(filename), Path(destination), StatusEnum.SUCCEEDED, delete=True
-            )
-
     @pytest.mark.asyncio
-    async def test_local_storage_processor_permissions_failure(
-        self, mocker, config, filesystem, await_scheduled_task
+    async def test_local_processing_failed_for_lack_of_permissions(
+        self, mocker, await_scheduled_task
     ):
-        logger = mocker.patch("src.processors.LocalStorageProcessor.logger.exception")
-
-        source = Path(filesystem.name) / "mnt"
-        destination = source / "video"
-        filename = source / f"tmp-{uuid.uuid4()}.mp4"
-
-        mock_get = mocker.patch(
-            "src.processors.Queue.get", side_effect=[(filename, destination)]
-        )
-
+        sut = LocalStorageProcessor()
+        filename, destination = "filename.mp4", "/tmp/destination"
         reason = "PermissionError: Permission Denied"
+        copyfile = mocker.patch(
+            "src.processors.copyfile", side_effect=PermissionError(reason)
+        )
+        notify = mocker.patch("src.processors.LocalStorageProcessor._notify")
 
-        mock_copyfile = mocker.patch(
-            "src.processors.copyfile",
-            side_effect=PermissionError(reason),
+        await sut.process(filename, destination)
+
+        copyfile.assert_awaited_once_with(
+            filename,
+            f"{destination}/{filename}",
         )
 
-        mock_notify = mocker.patch("src.processors.LocalStorageProcessor._notify")
+        await await_scheduled_task()
 
-        async with FileWatcher(config=config):
-            # run all waiting tasks.
-            await await_scheduled_task()
-
-            mock_get.assert_awaited()
-            mock_copyfile.assert_awaited_once_with(
-                Path(filename), str(destination / filename.name)
-            )
-
-            # Make sure we log the exception.
-            logger.assert_called_once()
-            mock_notify.assert_awaited_once_with(
-                Path(filename),
-                Path(destination),
-                StatusEnum.FAILED,
-                reason,
-            )
+        notify.assert_awaited_once_with(
+            filename, destination, StatusEnum.FAILED, reason
+        )
 
     @pytest.mark.asyncio
-    async def test_payload_is_sent_to_notifier(
-        self, mocker, config, filesystem, await_scheduled_task
-    ):
-        source = Path(filesystem.name) / "mnt"
-        destination = source / "video"
-        filename = source / f"tmp-{uuid.uuid4()}.mp4"
-
-        exception = mocker.patch(
-            "src.processors.LocalStorageProcessor.logger.exception"
-        )
-
-        mock_copyfile = mocker.patch("src.processors.copyfile", returned_value=None)
-
-        mock_get = mocker.patch(
-            "src.processors.Queue.get", side_effect=[(filename, destination)]
-        )
-
-        notifier = mocker.MagicMock()
-        mock_acquire = mocker.Mock(return_value=None)
-        notifier.acquire = mock_acquire
-        notifier.maybe_start = mocker.AsyncMock()
-        notifier.stop = mocker.AsyncMock()
-        mock = mocker.PropertyMock(return_value=notifier)
-
+    async def test_payload_is_sent_to_notifier(self, mocker, await_scheduled_task):
+        sut = LocalStorageProcessor()
+        filename, destination = "filename.mp4", "/tmp/destination"
+        mocker.patch("src.processors.copyfile")
         mocker.patch(
-            "src.processors.LocalStorageProcessor.notifier",
-            new=mock,
+            "src.processors.LocalStorageProcessor.notifier", new=get_notifier_mock()
         )
+        await sut.process(filename, destination)
+        await await_scheduled_task()
+        sut.notifier.acquire.assert_called_once()
 
-        async with FileWatcher(config=config):
-            await await_scheduled_task()
-            mock_get.assert_awaited()
-            mock_copyfile.assert_awaited_once_with(
-                Path(filename), str(destination / filename.name)
-            )
-            exception.assert_not_called()
-            mock_acquire.assert_called_once_with(mocker.ANY)
+    @pytest.mark.asyncio
+    async def test_should_remove_file_from_origin(self, mocker, await_scheduled_task):
+        sut = LocalStorageProcessor()
+        filename, destination = "filename.mp4", "/tmp/destination"
+        mocker.patch("src.processors.copyfile")
+        mocker.patch(
+            "src.processors.LocalStorageProcessor.notifier", new=get_notifier_mock()
+        )
+        unlink = mocker.patch("src.processors.unlink")
+        await sut.process(filename, destination, delete=True)
+        await await_scheduled_task()
+        unlink.assert_awaited_once_with(filename)
 
 
 class TestHttpStorageProcessor:
-    @pytest.fixture(autouse=True)
-    def mock_processors(self, mocker):
-        # Mock background tasks (since their running forever and we are going to wait them manually)
-        # spec=True, cause a check is done in library to make sure they are dealing with a ServiceTask
-        mocker.patch("src.watchers.FileWatcher._watch", spec=True)
-        mocker.patch("src.watchers.FileWatcher._provide", spec=True)
-        mocker.patch("src.processors.LocalStorageProcessor._consume", spec=True)
-        mocker.patch("src.processors.FtpStorageProcessor._consume", spec=True)
-        mocker.patch("src.notifiers.Notifier._notify", spec=True)
-        mocker.patch("aiofiles.os.path.isfile", returned_value=True)
+    @pytest.mark.asyncio
+    async def test_http_storage_processing_succeeded(
+        self, mocker, await_scheduled_task
+    ):
+        # Arrange
+        sut = HttpStorageProcessor()
+        filename, destination = "filename.mp4", "https://server/documents/videos"
+
+        # Mocks
+        send = mocker.patch("src.processors.RetryClient.post")
+        send.return_value.__aenter__.return_value.ok = True
+        writer = mocker.patch("src.processors.aiohttp.MultipartWriter")
+        writer_obj = writer.return_value.__enter__.return_value
+        writer_obj.append = mocker.MagicMock()
+        notify = mocker.patch("src.processors.HttpStorageProcessor._notify")
+        content = io.StringIO()
+        mock_open = mocker.patch(
+            "src.processors.aiofiles.open", new=mocker.AsyncMock(side_effect=[content])
+        )
+
+        # Act
+        await sut.process(filename, destination)
+
+        # Assert
+        mock_open.assert_awaited_once_with(filename, "rb")
+        writer_obj.append.assert_called_once_with(content)
+        await await_scheduled_task()
+        notify.assert_awaited_once_with(filename, destination, StatusEnum.SUCCEEDED)
 
     @pytest.mark.asyncio
-    async def test_http_storage_processor_server_down_failure(
-        self, mocker, config, filesystem, aiohttp_server, await_scheduled_task
+    async def test_should_log_failure_when_error_occurred_while_sending_file_on_destination_server(
+        self, mocker, await_scheduled_task
     ):
-        PORT = 8000
+        # Arrange
+        sut = HttpStorageProcessor()
+        filename, destination = "filename.mp4", "https://server/documents/videos"
 
-        await aiohttp_server(make_app(status=500), port=PORT)
-
-        source = Path(filesystem.name) / "mnt"
-        destination = f"http://127.0.0.1:{PORT}/documents/audio"
-        filename = source / f"tmp-{uuid.uuid4()}.mp3"
-
-        debug = mocker.patch("src.processors.HttpStorageProcessor.logger.debug")
-
-        mock_get = mocker.patch(
-            "src.processors.Queue.get", side_effect=[(filename, destination)]
-        )
-
+        # Mocks
+        send = mocker.patch("src.processors.RetryClient.post")
+        send.return_value.__aenter__.return_value.ok = False
+        writer = mocker.patch("src.processors.aiohttp.MultipartWriter")
+        writer_obj = writer.return_value.__enter__.return_value
+        writer_obj.append = mocker.MagicMock()
+        notify = mocker.patch("src.processors.HttpStorageProcessor._notify")
+        content = io.StringIO()
         mock_open = mocker.patch(
-            "src.processors.aiofiles.open", new_callable=mocker.AsyncMock
+            "src.processors.aiofiles.open", new=mocker.AsyncMock(side_effect=[content])
         )
 
-        mock_notify = mocker.patch("src.processors.HttpStorageProcessor._notify")
+        # Act
+        await sut.process(filename, destination)
 
-        async with FileWatcher(config=config, port=PORT):
-            await await_scheduled_task()
-            mock_get.assert_awaited()
-            mock_open.assert_awaited_once_with(filename, "rb")
-
-            debug.assert_called_once()
-
-            mock_notify.assert_awaited_once_with(
-                Path(filename),
-                destination,
-                StatusEnum.FAILED,
-                mocker.ANY,
-            )
+        # Assert
+        mock_open.assert_awaited_once_with(filename, "rb")
+        writer_obj.append.assert_called_once_with(content)
+        await await_scheduled_task()
+        notify.assert_awaited_once_with(
+            filename, destination, StatusEnum.FAILED, mocker.ANY
+        )
 
     @pytest.mark.asyncio
-    async def test_http_storage_process_the_file(
-        self, mocker, config, filesystem, aiohttp_server, await_scheduled_task
+    async def test_should_log_failure_when_unable_to_read_the_source_file(
+        self, mocker, await_scheduled_task
     ):
-        PORT = 8000
+        # Arrange
+        sut = HttpStorageProcessor()
+        filename, destination = "filename.mp4", "https://server/documents/videos"
+        reason = "PermissionError: Permission Denied"
 
-        await aiohttp_server(make_app(status=200), port=PORT)
-
-        source = Path(filesystem.name) / "mnt"
-        destination = f"http://127.0.0.1:{PORT}/documents/audio"
-        filename = source / f"tmp-{uuid.uuid4()}.mp3"
-
-        debug = mocker.patch("src.processors.HttpStorageProcessor.logger.debug")
-
-        mock_get = mocker.patch(
-            "src.processors.Queue.get", side_effect=[(filename, destination)]
-        )
-
+        # Mocks
+        send = mocker.patch("src.processors.RetryClient.post")
+        send.return_value.__aenter__.return_value.ok = True
+        writer = mocker.patch("src.processors.aiohttp.MultipartWriter")
+        writer_obj = writer.return_value.__enter__.return_value
+        writer_obj.append = mocker.MagicMock()
+        notify = mocker.patch("src.processors.HttpStorageProcessor._notify")
         mock_open = mocker.patch(
-            "src.processors.aiofiles.open", new_callable=mocker.AsyncMock
+            "src.processors.aiofiles.open",
+            new=mocker.AsyncMock(side_effect=[PermissionError(reason)]),
         )
 
-        mock_notify = mocker.patch("src.processors.HttpStorageProcessor._notify")
+        # Act
+        await sut.process(filename, destination)
 
-        async with FileWatcher(config=config, port=PORT):
-            await await_scheduled_task()
-            mock_get.assert_awaited()
-            mock_open.assert_awaited_once_with(filename, "rb")
-
-            debug.assert_not_called()
-
-            mock_notify.assert_awaited_once_with(
-                Path(filename),
-                destination,
-                StatusEnum.SUCCEEDED,
-            )
+        # Assert
+        mock_open.assert_awaited_once_with(filename, "rb")
+        writer_obj.append.assert_not_called()
+        await await_scheduled_task()
+        notify.assert_awaited_once_with(
+            filename,
+            destination,
+            StatusEnum.FAILED,
+            "PermissionError: Permission Denied",
+        )
 
     @pytest.mark.asyncio
     async def test_payload_is_sent_to_notifier(
         self, mocker, config, filesystem, aiohttp_server, await_scheduled_task
     ):
-        PORT = 8000
+        # Arrange
+        sut = HttpStorageProcessor()
+        filename, destination = "filename.mp4", "https://server/documents/videos"
 
-        await aiohttp_server(make_app(status=200), port=PORT)
-
-        source = Path(filesystem.name) / "mnt"
-        destination = f"http://127.0.0.1:{PORT}/documents/audio"
-        filename = source / f"tmp-{uuid.uuid4()}.mp3"
-
-        debug = mocker.patch("src.processors.HttpStorageProcessor.logger.debug")
-
-        mock_get = mocker.patch(
-            "src.processors.Queue.get", side_effect=[(filename, destination)]
+        # Mocks
+        send = mocker.patch("src.processors.RetryClient.post")
+        send.return_value.__aenter__.return_value.ok = True
+        writer = mocker.patch("src.processors.aiohttp.MultipartWriter")
+        writer_obj = writer.return_value.__enter__.return_value
+        writer_obj.append = mocker.MagicMock()
+        content = io.StringIO()
+        mocker.patch(
+            "src.processors.aiofiles.open", new=mocker.AsyncMock(side_effect=[content])
+        )
+        mocker.patch(
+            "src.processors.HttpStorageProcessor.notifier", new=get_notifier_mock()
         )
 
-        mock_open = mocker.patch(
-            "src.processors.aiofiles.open", new_callable=mocker.AsyncMock
+        # Act
+        await sut.process(filename, destination)
+        await await_scheduled_task()
+
+        # Assert
+        sut.notifier.acquire.assert_called_once()
+
+
+class TestFtpStorageProcessor:
+    @pytest.mark.asyncio
+    async def test_ftp_storage_processing_succeeded(self, mocker, await_scheduled_task):
+        # Arrange
+        sut = FtpStorageProcessor()
+        filename, destination = (
+            "filename.mp4",
+            "ftp://username:password@ftp.foo.org/home/user/videos",
         )
 
-        notifier = mocker.MagicMock()
-        mock_acquire = mocker.Mock(return_value=None)
-        notifier.acquire = mock_acquire
-        notifier.maybe_start = mocker.AsyncMock()
-        notifier.stop = mocker.AsyncMock()
-        mock = mocker.PropertyMock(return_value=notifier)
+        # Mocks
+        uploader = mocker.patch("aioftp.Client.context")
+        uploader_obj = uploader.return_value.__aenter__.return_value
+        uploader_obj.upload = mocker.AsyncMock()
+        notify = mocker.patch("src.processors.FtpStorageProcessor._notify")
+
+        # Act
+        await sut.process(filename, destination)
+        uploader_obj.upload.assert_awaited_once_with(filename, destination)
+        await await_scheduled_task()
+        notify.assert_awaited_once_with(filename, destination, StatusEnum.SUCCEEDED)
+
+    @pytest.mark.asyncio
+    async def test_should_log_failure_when_error_occurred_while_sending_file_on_destination_server(
+        self, mocker, await_scheduled_task
+    ):
+        # Arrange
+        sut = FtpStorageProcessor()
+        filename, destination = (
+            "filename.mp4",
+            "ftp://username:password@ftp.foo.org/home/user/videos",
+        )
+
+        # Mocks
+        uploader = mocker.patch("aioftp.Client.context")
+        uploader_obj = uploader.return_value.__aenter__.return_value
+        uploader_obj.upload = mocker.AsyncMock(side_effect=[aioftp.AIOFTPException()])
+        notify = mocker.patch("src.processors.FtpStorageProcessor._notify")
+
+        # Act
+        await sut.process(filename, destination)
+        uploader_obj.upload.assert_awaited_once_with(filename, destination)
+        await await_scheduled_task()
+        notify.assert_awaited_once_with(
+            filename, destination, StatusEnum.FAILED, mocker.ANY
+        )
+
+    @pytest.mark.asyncio
+    async def test_payload_is_sent_to_notifier(self, mocker, await_scheduled_task):
+        # Arrange
+        sut = FtpStorageProcessor()
+        filename, destination = (
+            "filename.mp4",
+            "ftp://username:password@ftp.foo.org/home/user/videos",
+        )
+
+        # Mocks
+        uploader = mocker.patch("aioftp.Client.context")
+        uploader_obj = uploader.return_value.__aenter__.return_value
+        uploader_obj.upload = mocker.AsyncMock()
 
         mocker.patch(
-            "src.processors.HttpStorageProcessor.notifier",
-            new=mock,
+            "src.processors.FtpStorageProcessor.notifier", new=get_notifier_mock()
         )
 
-        async with FileWatcher(config=config, port=PORT):
-            await await_scheduled_task()
-            mock_get.assert_awaited()
-            mock_open.assert_awaited_once_with(filename, "rb")
-
-            debug.assert_not_called()
-
-            mock_acquire.assert_called_once_with(mocker.ANY)
-
-
-# FIXME: Add FtpServer test later.
-
-#
-# class TestFtpStorageProcessor:
-#     @pytest.fixture(autouse=True)
-#     def mock_processors(self, mocker):
-#         # Mock background tasks (since their running forever and we are going to wait them manually)
-#         # spec=True, cause a check is done in library to make sure they are dealing with a ServiceTask
-#         mocker.patch("src.watchers.FileWatcher._watch", spec=True)
-#         mocker.patch("src.watchers.FileWatcher._provide", spec=True)
-#         mocker.patch("src.processors.LocalStorageProcessor._process", spec=True)
-#         mocker.patch("src.processors.HttpStorageProcessor._process", spec=True)
-#         mocker.patch("src.notifiers.Notifier._notify", spec=True)
-#
-#     @pytest.mark.asyncio
-#     async def test_http_storage_processor_server_down_failure(
-#         self, mocker, config, filesystem, await_scheduled_task
-#     ):
-#
-#         PORT = 8000
-#
-#         await aiohttp_server(make_app(status=500), port=PORT)
-#
-#         source = Path(filesystem.name) / "mnt"
-#         destination = f"http://127.0.0.1:{PORT}/documents/audio"
-#         filename = source / f"tmp-{uuid.uuid4()}.mp3"
-#
-#         debug = mocker.patch("src.processors.HttpStorageProcessor.logger.debug")
-#
-#         mock_get = mocker.patch(
-#             "src.processors.Queue.get", side_effect=[(filename, destination)]
-#         )
-#
-#         mock_open = mocker.patch(
-#             "src.processors.aiofiles.open", new_callable=mocker.AsyncMock
-#         )
-#
-#         mock_notify = mocker.patch("src.processors.HttpStorageProcessor._notify")
-#
-#         async with FileWatcher(config=config, port=PORT):
-#             watcher = FileWatcher(config=config, port=PORT)
-#             await watcher.start()
-#
-#             await await_scheduled_task()
-#             mock_get.assert_awaited()
-#             mock_open.assert_awaited_once_with(filename, "rb")
-#
-#             debug.assert_called_once()
-#
-#             mock_notify.assert_awaited_once_with(
-#                 Path(filename),
-#                 destination,
-#                 StatusEnum.FAILED,
-#                 mocker.ANY,
-#             )
-#
-#
-# @pytest.mark.asyncio
-# async def test_http_storage_process_the_file(
-#     self, mocker, config, filesystem, aiohttp_server, await_scheduled_task
-# ):
-#
-#     PORT = 8000
-#
-#     await aiohttp_server(make_app(status=200), port=PORT)
-#
-#     source = Path(filesystem.name) / "mnt"
-#     destination = f"http://127.0.0.1:{PORT}/documents/audio"
-#     filename = source / f"tmp-{uuid.uuid4()}.mp3"
-#
-#     debug = mocker.patch("src.processors.HttpStorageProcessor.logger.debug")
-#
-#     mock_get = mocker.patch(
-#         "src.processors.Queue.get", side_effect=[(filename, destination)]
-#     )
-#
-#     mock_open = mocker.patch(
-#         "src.processors.aiofiles.open", new_callable=mocker.AsyncMock
-#     )
-#
-#     mock_notify = mocker.patch("src.processors.HttpStorageProcessor._notify")
-#
-#     async with FileWatcher(config=config, port=PORT):
-#         watcher = FileWatcher(config=config, port=PORT)
-#         await watcher.start()
-#
-#         await await_scheduled_task()
-#         mock_get.assert_awaited()
-#         mock_open.assert_awaited_once_with(filename, "rb")
-#
-#         debug.assert_not_called()
-#
-#         mock_notify.assert_awaited_once_with(
-#             Path(filename),
-#             destination,
-#             StatusEnum.SUCCEEDED,
-#         )
-#
-#
-# @pytest.mark.asyncio
-# async def test_payload_is_sent_to_notifier(
-#     self, mocker, config, filesystem, aiohttp_server, await_scheduled_task
-# ):
-#     PORT = 8000
-#
-#     await aiohttp_server(make_app(status=200), port=PORT)
-#
-#     source = Path(filesystem.name) / "mnt"
-#     destination = f"http://127.0.0.1:{PORT}/documents/audio"
-#     filename = source / f"tmp-{uuid.uuid4()}.mp3"
-#
-#     debug = mocker.patch("src.processors.HttpStorageProcessor.logger.debug")
-#
-#     mock_get = mocker.patch(
-#         "src.processors.Queue.get", side_effect=[(filename, destination)]
-#     )
-#
-#     mock_open = mocker.patch(
-#         "src.processors.aiofiles.open", new_callable=mocker.AsyncMock
-#     )
-#
-#     notifier = mocker.MagicMock()
-#     mock_acquire = mocker.Mock(return_value=None)
-#     notifier.acquire = mock_acquire
-#     notifier.maybe_start = mocker.AsyncMock()
-#     notifier.stop = mocker.AsyncMock()
-#     mock = mocker.PropertyMock(return_value=notifier)
-#
-#     mocker.patch(
-#         "src.processors.HttpStorageProcessor.notifier",
-#         new=mock,
-#     )
-#
-#     async with FileWatcher(config=config, port=PORT):
-#         watcher = FileWatcher(config=config, port=PORT)
-#         await watcher.start()
-#
-#         await await_scheduled_task()
-#         mock_get.assert_awaited()
-#         mock_open.assert_awaited_once_with(filename, "rb")
-#
-#         debug.assert_not_called()
-#
-#         mock_acquire.assert_called_once_with(mocker.ANY)
+        await sut.process(filename, destination)
+        uploader_obj.upload.assert_awaited_once_with(filename, destination)
+        await await_scheduled_task()
+        sut.notifier.acquire.assert_called_once()
