@@ -39,14 +39,25 @@ class Notifier(mode.Service):
     async def _notify(self, **kwargs):
         while not self.should_stop:
             payload = await self.unprocessed.get()
-            asyncio.create_task(self._send(payload, **kwargs))
+            asyncio.create_task(self.notify(payload, **kwargs))
             await self.sleep(1.0)
 
-    async def _send(self, payload, **kwargs):
+    async def notify(self, payload, **kwargs):
         async with RetryClient() as client:
             try:
-                self.logger.debug(f"\n{json.dumps(payload, indent=2)}")
-                await client.post(self.url, json=payload)
+                await self._handle_notification(client, payload)
             except ClientError as exp:
-                self.logger.exception(exp)
+                self.logger.error(exp)
+                self.logger.debug(exp, stack_info=True)
                 return
+
+    async def _handle_notification(self, client, payload):
+        async with client.post(self.url) as response:
+            self.logger.debug(f"\n{json.dumps(payload, indent=2)}")
+            if not response.ok:
+                await self._handle_failure(response)
+
+    async def _handle_failure(self, response):
+        reason = await response.text()
+        reason = f"{response.status} {response.reason}\n\n{reason}"
+        self.logger.debug(reason)
