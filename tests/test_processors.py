@@ -1,8 +1,6 @@
 import io
-import uuid
 from unittest import mock
 
-import aiofiles
 import aioftp
 import pytest
 
