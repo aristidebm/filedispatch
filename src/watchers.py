@@ -43,60 +43,63 @@ class FileWatcher(BaseWatcher):
         port: int = None,
         log_file: PATH = None,
         log_level: str = None,
-        no_web_app: bool = False,
+        with_webapp: bool = False,
     ):
+        self._config = config
+        self._web_app_host = host or 3001
+        self._web_app_port = port or "127.0.0.1"
+        self._with_webapp = with_webapp
+        self._log_file = log_file
+        self._log_level = log_level
+        self.unprocessed: Queue[Tuple[PATH, PATH]] | None = None
         super().__init__()
-        self.config = config
-        self.web_app_host = host
-        self.web_app_port = port
-        self.no_web_app = no_web_app
-        self.log_file = log_file
-        self.log_level = log_level
 
-        if not self.no_web_app:
-            self.web_app_port = self.web_app_port or 3001
-            self.web_app_host = self.web_app_host or "127.0.0.1"
-
-    async def on_start(self):
-        await super().on_start()
-        self.unprocessed: Queue[Tuple[PATH, PATH]] = Queue()
-        if not self.no_web_app:
-            # The server will be closed automatically when FileWatcher is suspended
-            # since each services suspend all its depencencies before shutdown.
-            asyncio.create_task(self.add_runtime_dependency(self.server))
+    def __post_init__(self) -> None:
+        self._init_processors()
+        if self._with_webapp:
+            self.add_dependency(self.server)
+            self.logger.info("The web-app is enabled.")
         else:
             self.logger.info("The web-app is disabled.")
 
+    async def on_start(self):
+        await super().on_start()
+        self.unprocessed = Queue()
+
     def on_init_dependencies(self):
-        super().on_init_dependencies()
-        processors = self._init_processors()
-        return processors
+        dependencies = super().on_init_dependencies()
+        dependencies += self.PROCESSORS_REGISTRY.values()
+        return dependencies
 
     def _init_processors(self) -> list[mode.ServiceT]:
         processors = []
         for p in self.PROCESSORS_REGISTRY.values():
-            p.with_web_app = not self.no_web_app
-            if not self.no_web_app:
+            if self._with_webapp:
                 # FIXME: Perhaps only one Notify is suffisent ? It can be interesting
                 #  to consider if we are sure of less traffic between processors and notifier.
                 p.notifier = Notifier(
-                    host=self.web_app_host, port=self.web_app_port, scheme="http"
+                    loop=self.loop,
+                    host=self._web_app_host,
+                    port=self._web_app_port,
+                    scheme="http",
                 )
+                # share the same loop between the service and its dependency
+            p.loop = self.loop
             processors.append(p)
 
         return processors
 
     async def on_started(self) -> None:
         await super().on_started()
-        await self._collect_unprocessed(config=self.config)
+        await self._collect_unprocessed(config=self._config)
 
     async def _collect_unprocessed(self, config=None):
-        config = config or self.config
+        config = config or self._config
         supported = {e: f.path for f in config.folders for e in f.extensions}
         collected = []
         for ext in supported:
             # glob doesn't support multiple extension globing
-            for filename in Path(self.config.source).glob(f"*.{ext}"):
+            for filename in Path(self._config.source).glob(f"*.{ext}"):
                 dest = self._find_destination(filename, config, supported)
 
                 if not dest or filename in collected:
@@ -108,11 +111,15 @@ class FileWatcher(BaseWatcher):
 
     @functools.cached_property
     def server(self):
-        return WebServer(host=self.web_app_host, port=self.web_app_port)
+        return WebServer(
+            loop=self.loop,
+            host=self._web_app_host,
+            port=self._web_app_port,
+        )
 
     @mode.Service.task
     async def _watch(self, config=None):
-        config = config or self.config
+        config = config or self._config
         async for changes in awatch(config.source):
             for change in changes:
                 # consider only adds, ignore all other changes.
@@ -158,7 +165,7 @@ class FileWatcher(BaseWatcher):
 
     def _find_destination(self, filename: PATH, config=None, mapping=None) -> PATH:
         mapping = mapping or {}
-        config = config or self.config
+        config = config or self._config
         _, ext = os.path.splitext(filename)
         ext = ext.lower().removeprefix(".")
 
@@ -170,14 +177,14 @@ class FileWatcher(BaseWatcher):
                 return folder.path
 
     def run(self):
-        log_level = getattr(logging, self.log_level or "", logging.INFO)
+        log_level = getattr(logging, self._log_level or "", logging.INFO)
         try:
             worker = mode.Worker(
                 self,
                 debug=bool(log_level == logging.DEBUG),
                 daemon=True,
                 loglevel=log_level,
-                logfile=self.log_file,
+                logfile=self._log_file,
                 redirect_stdouts=False,
             )
             worker.execute_from_commandline()

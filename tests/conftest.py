@@ -53,14 +53,14 @@ def filesystem():  # FIXME: It can be handy to rely on pytest tmp_path fixture
     tempdir.cleanup()
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    policy = asyncio.get_event_loop_policy()
-    loop = policy.new_event_loop()
-    # Enable debugging
-    # loop.set_debug(True)
-    yield loop
-    loop.close()
+# @pytest.fixture
+# def event_loop():
+#     policy = asyncio.get_event_loop_policy()
+#     loop = policy.new_event_loop()
+#     # Enable debugging
+#     # loop.set_debug(True)
+#     yield loop
+#     loop.close()
 
 
 # FIXME: we don't necessarily want to mock server when testing the server itself.

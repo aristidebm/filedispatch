@@ -33,8 +33,7 @@ class BaseStorageProcessor(mode.Service):
 
     fancy_name: str = "Base Processor"
 
-    def __init__(self, notifier=None, with_web_app=True, **kwargs):
-        self._with_web_app = with_web_app
+    def __init__(self, notifier=None, **kwargs):
         self._notifier = notifier
         super().__init__(**kwargs)
 
@@ -43,29 +42,31 @@ class BaseStorageProcessor(mode.Service):
         # define before background task start since the use Queues
         # for the matter of safety https://mode.readthedocs.io/en/latest/userguide/services.html#ordering
         self.unprocessed: Queue[Tuple[PATH, PATH]] = Queue()
-        if self.with_web_app:
-            self.add_dependency(self.notifier)
+        self.add_dependency(self.notifier)
 
     async def _notify(
         self, filename, destination, status, reason=None, delete=False, **kwargs
     ):
-        if not self.with_web_app:
+        if not self.notifier:
             return
+
         try:
             payload = await get_payload(
                 filename, destination, status, self.fancy_name, reason
             )
         except error_wrappers.ValidationError as exp:
             self.logger.debug(exp)
-        else:
-            # Start notifier on demand (because notifier isn't added using running add_runtime_dependencies)
-            await self.notifier.maybe_start()
-            self.notifier.acquire(payload)
-            if delete and status != StatusEnum.FAILED:
-                try:
-                    await unlink(filename)
-                except OSError as exp:
-                    self.logger.debug(exp)
+            return
+
+        # Start notifier on demand (because notifier isn't added using running add_runtime_dependencies)
+        await self.notifier.maybe_start()
+        self.notifier.acquire(payload)
+
+        if delete and status != StatusEnum.FAILED:
+            try:
+                await unlink(filename)
+            except OSError as exp:
+                self.logger.debug(exp)
 
     @property
     def notifier(self):
@@ -75,27 +76,22 @@ class BaseStorageProcessor(mode.Service):
     def notifier(self, notifier):
         self._notifier = notifier
 
-    @property
-    def with_web_app(self):
-        return self._with_web_app
-
-    @with_web_app.setter
-    def with_web_app(self, value):
-        self._with_web_app = value
-
     @abc.abstractmethod
     async def process(self, filename, destination, delete=False, **kwargs):
         pass
 
-    @mode.Service.task
-    async def _consume(self, **kwargs):
-        while not self.should_stop:
-            filename, destination = await self.unprocessed.get()
-            asyncio.create_task(self.process(filename, destination, **kwargs))
-            await self.sleep(1.0)
+    async def consume(self, **kwargs):
+        filename, destination = await self.unprocessed.get()
+        asyncio.create_task(self.process(filename, destination, **kwargs))
+        await self.sleep(1.0)
 
     def acquire(self, filename: PATH, destination: PATH, **kwargs) -> None:
         asyncio.create_task(self.unprocessed.put((filename, destination)))
+
+    def add_dependency(self, service):
+        if not service:
+            return
+        return super().add_dependency(service)
 
 
 class LocalStorageProcessor(BaseStorageProcessor):
@@ -116,6 +112,11 @@ class LocalStorageProcessor(BaseStorageProcessor):
             asyncio.create_task(
                 self._notify(filename, destination, StatusEnum.FAILED, reason)
             )
+
+    @mode.Service.task
+    async def _consume(self):
+        while not self.should_stop:
+            await self.consume()
 
 
 class HttpStorageProcessor(BaseStorageProcessor):
@@ -155,6 +156,11 @@ class HttpStorageProcessor(BaseStorageProcessor):
                 yield chunk
                 chunk = await f.read(64 * 1024)
 
+    @mode.Service.task
+    async def _consume(self):
+        while not self.should_stop:
+            await self.consume()
+
 
 class FtpStorageProcessor(BaseStorageProcessor):
     fancy_name = "FTP processor"
@@ -187,3 +193,8 @@ class FtpStorageProcessor(BaseStorageProcessor):
                 self.logger.debug(exp, stack_info=True)
                 reason = f"{exp}"
                 await self._notify(filename, destination, StatusEnum.FAILED, reason)
+
+    @mode.Service.task
+    async def _consume(self):
+        while not self.should_stop:
+            await self.consume()

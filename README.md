@@ -69,7 +69,7 @@ options:
   -P PORT, --port PORT  web app port (default: 3001)
   -d, --daemon          Run as daemon
   -x, --exit            Sends SIGTERM to the running daemon
-  --no-webapp           Whether to launch web app
+  --with-webapp         Whether to launch web app (default: false)
   --log-file LOG_FILE   Where logs have to come if working in daemon. Ignored if working in foreground.
   --log-level LOG_LEVEL
                         Logging level (default: INFO)

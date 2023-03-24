@@ -21,7 +21,6 @@
 # - By used protocol
 from functools import cached_property, partial
 import asyncio
-from pathlib import Path
 
 import aiosqlite
 import mode
@@ -59,26 +58,21 @@ class WebServer(mode.Service):
         self.port: int = port
 
     async def on_started(self) -> None:
-        # web.run_app is not only a blocking API (to be run only on synchronous environment, wich is not our case), but
-        # also create a new event loop if not provided, and try to apply run_until_complete on provided loop that also
-        # generate a Runtime error, loop already running, so we must declare our own asynchronous app runner.
-        # https://github.com/aio-libs/aiohttp/blob/master/aiohttp/web.py#L447
-        # https://github.com/aio-libs/aiohttp/issues/2608
-        await super().on_started()
         await self.runner.app["dao"].create_table()
-        await self.run_app()
 
     async def on_stop(self) -> None:
-        self.logger.info("web server is shutting down ...")
-        await self.runner.cleanup()
+        if self.runner:
+            self.logger.info("web server is shutting down ...")
+            await self.runner.cleanup()
         await super().on_stop()
 
-    def _make_app(self):
-        return make_app()
+    @mode.Service.task
+    async def _serve(self):
+        await self.run_app()
 
     @cached_property
     def runner(self):
-        app = self._make_app()
+        app = make_app()
         runner = web.AppRunner(app, logger=self.logger)
         return runner
 
@@ -88,5 +82,5 @@ class WebServer(mode.Service):
         site = web.TCPSite(self.runner, self.host, self.port)
         await site.start()
 
-        while True:
+        while not self.should_stop:
             await asyncio.sleep(3600)  # sleep forever
