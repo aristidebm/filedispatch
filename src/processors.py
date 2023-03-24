@@ -1,8 +1,5 @@
 import asyncio
-import functools
-import math
-from typing import Tuple, Optional
-from functools import wraps, cached_property
+from typing import Tuple
 from asyncio import Queue
 import abc
 import os
@@ -35,17 +32,22 @@ class BaseStorageProcessor(mode.Service):
 
     def __init__(self, notifier=None, **kwargs):
         self._notifier = notifier
+        self.unprocessed: Queue[Tuple[PATH, PATH]] | None = None
         super().__init__(**kwargs)
 
     async def on_start(self) -> None:
         await super().on_start()
-        # define before background task start since the use Queues
-        # for the matter of safety https://mode.readthedocs.io/en/latest/userguide/services.html#ordering
-        self.unprocessed: Queue[Tuple[PATH, PATH]] = Queue()
+        self.unprocessed = Queue()
         self.add_dependency(self.notifier)
 
     async def _notify(
-        self, filename, destination, status, reason=None, delete=False, **kwargs
+        self,
+        filename,
+        destination,
+        status,
+        reason=None,
+        delete=False,
+        **kwargs,
     ):
         if not self.notifier:
             return
@@ -58,7 +60,6 @@ class BaseStorageProcessor(mode.Service):
             self.logger.debug(exp)
             return
 
-        # Start notifier on demand (because notifier isn't added using running add_runtime_dependencies)
         await self.notifier.maybe_start()
         self.notifier.acquire(payload)
 
@@ -123,8 +124,6 @@ class HttpStorageProcessor(BaseStorageProcessor):
     fancy_name = "HTTP processor"
 
     async def process(self, filename, destination, delete=False, **kwargs):
-        # https://docs.aiohttp.org/en/stable/multipart.html#sending-multipart-requests
-
         with aiohttp.MultipartWriter() as writer:
             try:
                 # FIXME: The content getter must depend on the file size,
@@ -148,7 +147,6 @@ class HttpStorageProcessor(BaseStorageProcessor):
                             filename, destination, StatusEnum.FAILED, reason
                         )
 
-    # https://docs.aiohttp.org/en/stable/client_quickstart.html#streaming-uploads
     async def _send_chunk(self, filename):  # useful for big files
         async with aiofiles.open(filename, "rb") as f:
             chunk = await f.read(64 * 1024)

@@ -44,6 +44,7 @@ class FileWatcher(BaseWatcher):
         log_file: PATH = None,
         log_level: str = None,
         with_webapp: bool = False,
+        **kwargs,
     ):
         self._config = config
         self._web_app_host = host or 3001
@@ -52,7 +53,7 @@ class FileWatcher(BaseWatcher):
         self._log_file = log_file
         self._log_level = log_level
         self.unprocessed: Queue[Tuple[PATH, PATH]] | None = None
-        super().__init__()
+        super().__init__(**kwargs)
 
     def __post_init__(self) -> None:
         self._init_processors()
@@ -83,15 +84,18 @@ class FileWatcher(BaseWatcher):
                     port=self._web_app_port,
                     scheme="http",
                 )
-                # share the same loop between the service and its dependency
+            # share the same loop between all dependencies so that we will not experiment wired
+            # behavior due to each dependency runs on it own event loop.
             p.loop = self.loop
             processors.append(p)
 
         return processors
 
     async def on_started(self) -> None:
-        await super().on_started()
+        if self._with_webapp:
+            await self.server.maybe_start()
         await self._collect_unprocessed(config=self._config)
+        await super().on_started()
 
     async def _collect_unprocessed(self, config=None):
         config = config or self._config
