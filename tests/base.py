@@ -1,5 +1,4 @@
 import os
-import tempfile
 
 import aioftp
 from aiohttp import web, hdrs
