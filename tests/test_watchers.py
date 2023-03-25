@@ -1,6 +1,4 @@
-import uuid
-from pathlib import Path
-
+import asyncio
 from watchfiles import Change
 
 import pytest
@@ -19,160 +17,85 @@ def mock_isfile(mocker):
 
 class TestWatch:
     @pytest.mark.asyncio
-    async def test_should_collect_unprocessed_files_when_service_start(self, mocker, config):
+    async def test_should_collect_unprocessed_files_on_starting(self, mocker, config):
         sut = FileWatcher(config=config)
         sut._collect_unprocessed = mocker.AsyncMock()
         async with sut:
             sut._collect_unprocessed.assert_awaited_once_with(config=config)
 
-    # @pytest.mark.asyncio
-    # async def test_new_files_are_queued(
-    #     self, mocker, config, filesystem, await_scheduled_tabsk, mock_isfile, mock_awatch
-    # ):
-    #     mock_put = mocker.patch("src.watchers.Queue.put")
-    #
-    #     dir_ = Path(filesystem.name) / "mnt"
-    #     filename = dir_ / f"tmp-{uuid.uuid4()}.mp4"
-    #
-    #     mock_isfile(returned_value=True)
-    #
-    #     # new change occurs in the watching directory.
-    #     changes = {(Change.added, filename)}
-    #     mock_awatch(changes)
-    #     async with FileWatcher(config=config) as watcher:
-    #         assert watcher.unprocessed.empty()
-    #         await await_scheduled_task()
-    #         mock_put.assert_awaited_once_with((filename, mocker.ANY))
+    @pytest.mark.asyncio
+    async def test_should_process_new_added_files(self, mocker, config, mock_awatch):
+        sut = FileWatcher(config=config)
+        queue_put = mocker.patch("src.watchers.Queue.put")
+        mocker.patch("src.watchers.aiofiles.os.path.isfile", side_effect=[True])
+        filename = f"{str(config.source).removesuffix('/')}/filename.mp4"
+        changes = {(Change.added, filename)}
+        mock_awatch(changes)
 
-    # @pytest.mark.asyncio
-    # async def test_existing_files_are_queued(
-    #     self, mocker, config, filesystem, await_scheduled_task, mock_awatch, mock_isfile
-    # ):
-    #     queue_put = mocker.patch("src.watchers.Queue.put")
-    #
-    #     dir_ = Path(filesystem.name) / "mnt"
-    #     filename = dir_ / f"tmp-{uuid.uuid4()}.mp4"
-    #
-    #     mock_isfile(returned_value=True)
-    #
-    #     # no change occurs in the watching directory.
-    #     changes = set()
-    #     mock_awatch(changes)
-    #
-    #     # Existing file in watching directory
-    #     mocker.patch("src.watchers.Path.glob", return_value=[filename])
-    #
-    #     async with FileWatcher(config=config):
-    #         await await_scheduled_task()
-    #         # Make sure the file is added to the processing queue
-    #         queue_put.assert_awaited_once_with((filename, mocker.ANY))
+        async with sut:
+            await asyncio.sleep(0)
+            queue_put.assert_awaited_once_with((filename, mocker.ANY))
 
+    @pytest.mark.asyncio
+    async def test_should_ignore_directories_and_symlinks(
+        self, mocker, config, mock_awatch
+    ):
+        sut = FileWatcher(config=config)
+        queue_put = mocker.patch("src.watchers.Queue.put")
+        mocker.patch("src.watchers.aiofiles.os.path.isfile", side_effect=[False])
 
-#     @pytest.mark.asyncio
-#     async def test_ignore_new_directories_and_symlinks(
-#         self, mocker, config, filesystem, await_scheduled_task, mock_isfile, mock_awatch
-#     ):
-#         queue_put = mocker.patch("src.watchers.Queue.put")
-#
-#         dir_ = Path(filesystem.name) / "mnt"
-#         filename = dir_ / f"tmp-{uuid.uuid4()}"  # is not a file
-#
-#         mock_isfile(returned_value=False)
-#
-#         # new change occurs in the watching directory.
-#         changes = {(Change.added, filename)}
-#         mock_awatch(changes)
-#
-#         async with FileWatcher(config=config) as watcher:
-#             assert watcher.unprocessed.empty()
-#             await await_scheduled_task()
-#             # Make sure the file is added to the processing queue
-#             queue_put.assert_not_awaited()
-#
-#     @pytest.mark.asyncio
-#     async def test_ignore_source_subdirectories_changes(
-#         self, mocker, config, filesystem, await_scheduled_task, mock_isfile, mock_awatch
-#     ):
-#         queue_put = mocker.patch("src.watchers.Queue.put")
-#
-#         dir_ = Path(filesystem.name) / "mnt"
-#         filename = (
-#             dir_ / "video" / f"tmp-{uuid.uuid4()}.mp4"
-#         )  # change in a subdirectory
-#
-#         mock_isfile(returned_value=True)
-#
-#         # new change occurs in the watching directory.
-#         changes = {(Change.added, filename)}
-#         mock_awatch(changes)
-#
-#         async with FileWatcher(config=config) as watcher:
-#             assert watcher.unprocessed.empty()
-#             # Make sure the file is added to the processing queue
-#             queue_put.assert_not_awaited()
-#
-#
-# class TestProvide:
-#     @pytest.fixture(autouse=True)
-#     def mock_provide(self, mocker):
-#         mocker.patch("src.watchers.FileWatcher._watch", spec=True)
-#
-#     @pytest.mark.asyncio
-#     async def test_changes_are_sent_to_processor(
-#         self, config, mocker, await_scheduled_task
-#     ):
-#         # mocks
-#
-#         source = Path("/parent") / "mnt"
-#
-#         destination = source / "video"
-#         filename = source / f"tmp-{uuid.uuid4()}.mp4"  # change in a subdirectory
-#
-#         mocker.patch(
-#             "src.watchers.Queue.get",
-#             side_effect=[(filename, destination), Exception],
-#         )
-#         mocker.patch("src.watchers.FileWatcher.sleep")  # don't want to really sleep
-#
-#         # mock the processor
-#         mock = mocker.Mock()
-#         base_mock = mocker.Mock(return_value=mock)
-#         mock.acquire = mocker.Mock(return_value=None)
-#         mock.maybe_start = mocker.AsyncMock()
-#
-#         mocker.patch("src.watchers.FileWatcher._get_processor", new=base_mock)
-#
-#         async with FileWatcher(config) as watcher:
-#             assert watcher.unprocessed.empty()
-#             await await_scheduled_task()
-#             mock.acquire.assert_called_once_with(filename, destination)
-#
-#     @pytest.mark.asyncio
-#     async def test_service_does_not_crash_if_no_web_app(
-#         self, config, mocker, await_scheduled_task
-#     ):
-#         # mocks
-#
-#         source = Path("/parent") / "mnt"
-#
-#         destination = source / "video"
-#         filename = source / f"tmp-{uuid.uuid4()}.mp4"  # change in a subdirectory
-#
-#         mocker.patch(
-#             "src.watchers.Queue.get",
-#             side_effect=[(filename, destination), Exception],
-#         )
-#         mocker.patch("src.watchers.FileWatcher.sleep")  # don't want to really sleep
-#
-#         # mock the processor
-#         mock = mocker.Mock()
-#         base_mock = mocker.Mock(return_value=mock)
-#         mock.acquire = mocker.Mock(return_value=None)
-#         mock.maybe_start = mocker.AsyncMock()
-#
-#         mocker.patch("src.watchers.FileWatcher._get_processor", new=base_mock)
-#
-#         async with FileWatcher(config, no_web_app=True) as watcher:
-#             assert watcher.unprocessed.empty()
-#             await await_scheduled_task()
-#             mock.acquire.assert_called_once_with(filename, destination)
+        filename = f"{str(config.source).removesuffix('/')}/filename.mp4"
+        changes = {(Change.added, filename)}
+
+        mock_awatch(changes)
+        async with sut:
+            await asyncio.sleep(0)
+            queue_put.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_should_perform_shallow_watching(self, config, mocker, mock_awatch):
+        sut = FileWatcher(config=config)
+        queue_put = mocker.patch("src.watchers.Queue.put")
+        mocker.patch("src.watchers.aiofiles.os.path.isfile", side_effect=[True])
+        filename = f"{str(config.source).removesuffix('/')}/subdirectory/filename.mp4"
+        changes = {(Change.added, filename)}
+
+        mock_awatch(changes)
+        async with sut:
+            await asyncio.sleep(0)
+            queue_put.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_should_route_changes_to_the_right_processors(
+        self, config, mocker, mock_awatch
+    ):
+        sut = FileWatcher(config=config)
+        processor1 = sut.PROCESSORS_REGISTRY["file"]
+        processor2 = sut.PROCESSORS_REGISTRY["http"]
+        processor3 = sut.PROCESSORS_REGISTRY["ftp"]
+        processor1.acquire = mocker.MagicMock()
+        processor2.acquire = mocker.MagicMock()
+        processor3.acquire = mocker.MagicMock()
+
+        mocker.patch("src.watchers.aiofiles.os.path.isfile", side_effect=[True])
+        filename = f"{str(config.source).removesuffix('/')}/filename.mp4"
+        changes = {(Change.added, filename)}
+
+        mock_awatch(changes)
+        async with sut:
+            await asyncio.sleep(0.1)
+            processor1.acquire.assert_called_once_with(filename, mocker.ANY)
+            processor2.acquire.assert_not_called()
+            processor3.acquire.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_should_not_crash_when_no_webapp(self, config):
+        async with FileWatcher(config=config, with_webapp=False):
+            ...
+
+    @pytest.mark.asyncio
+    async def test_should_not_initialize_notifiers_when_no_webapp(self, config):
+        sut = FileWatcher(config)
+        async with sut:
+            for p in sut.PROCESSORS_REGISTRY.values():
+                assert p.notifier is None

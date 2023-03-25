@@ -24,13 +24,15 @@ class Notifier(mode.Service):
         *args,
         **kwargs,
     ):
-        super(Notifier, self).__init__(*args, **kwargs)
         host = host and host.strip("/")
         path = path.strip("/")
         self.url = f"{scheme}://{host}:{port}/{path}"
+        self.unprocessed: Queue | None = None
+        super().__init__(*args, **kwargs)
 
     async def on_start(self) -> None:
         self.unprocessed = Queue()
+        await super().on_start()
 
     def acquire(self, payload, **kwargs):
         asyncio.create_task(self.unprocessed.put(payload))

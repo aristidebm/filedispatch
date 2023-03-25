@@ -59,13 +59,13 @@ class FileWatcher(BaseWatcher):
         self._init_processors()
         if self._with_webapp:
             self.add_dependency(self.server)
-            self.logger.info("The web-app is enabled.")
+            self.logger.info("The webapp is enabled.")
         else:
-            self.logger.info("The web-app is disabled.")
+            self.logger.info("The webapp is disabled.")
 
     async def on_start(self):
-        await super().on_start()
         self.unprocessed = Queue()
+        await super().on_start()
 
     def on_init_dependencies(self):
         dependencies = super().on_init_dependencies()
@@ -84,8 +84,8 @@ class FileWatcher(BaseWatcher):
                     port=self._web_app_port,
                     scheme="http",
                 )
-            # share the same loop between all dependencies so that we will not experiment wired
-            # behavior due to each dependency runs on it own event loop.
+            # Share the same event loop between all dependencies so that we will not experiment wired
+            # behaviors due to each dependency runs on it own event loop.
             p.loop = self.loop
             processors.append(p)
 
@@ -110,7 +110,7 @@ class FileWatcher(BaseWatcher):
                     continue
 
                 collected.append(filename)
-                asyncio.create_task(self.unprocessed.put((filename, dest)))
+                await self.unprocessed.put((filename, dest))
                 self.logger.debug(f"File {filename} is appended to be processed")
 
     @functools.cached_property
@@ -148,7 +148,7 @@ class FileWatcher(BaseWatcher):
                     continue
 
                 # we don't need this to be completed before we continue, so we don't need to block uselessly.
-                asyncio.create_task(self.unprocessed.put((filename, dest)))
+                await self.unprocessed.put((filename, dest))
                 self.logger.info(f"File {filename} is appended to be processed")
 
     @mode.Service.task
