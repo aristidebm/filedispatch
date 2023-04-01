@@ -34,6 +34,7 @@ class BaseWorker(mode.Service):
     def __init__(self, notifier=None, **kwargs):
         self._notifier = notifier
         self.unprocessed: Queue[Message] = Queue()
+        self._delete = kwargs.get("delete", False)
         super().__init__(**kwargs)
 
     async def on_start(self) -> None:
@@ -86,7 +87,7 @@ class BaseWorker(mode.Service):
 
     async def consume(self, **kwargs):
         message = await self.unprocessed.get()
-        asyncio.create_task(self.process(message, **kwargs))
+        asyncio.create_task(self.process(message, delete=self._delete, **kwargs))
         await self.sleep(1.0)
 
     def acquire(self, message: Message, **kwargs) -> None:

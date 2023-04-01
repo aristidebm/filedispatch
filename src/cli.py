@@ -80,6 +80,13 @@ def parse_argv(argv: list) -> argparse.Namespace:
         default=False,
     )
     parser.add_argument(
+        "-m",
+        "--move",
+        help="Whether to launch web app",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
         "--log-file",
         type=validate_log_file,
         help="Where logs have to come if working in daemon. Ignored if working in foreground.",
@@ -117,8 +124,8 @@ def setup_logging(args):
         for h in logging_config.get("handlers", []):
             logging_config["handlers"][h]["level"] = args.log_level
 
-        for l in logging_config.get("loggers", []):
-            logging_config["loggers"][l]["level"] = args.log_level
+        for s in logging_config.get("loggers", []):
+            logging_config["loggers"][s]["level"] = args.log_level
 
     logging.config.dictConfig(logging_config)
 
@@ -158,6 +165,7 @@ def main():
         log_file=args.log_file,
         log_level=args.log_level,
         with_webapp=args.with_webapp,
+        delete=args.move,
     )
 
     setup_logging(args)

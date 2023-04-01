@@ -44,16 +44,18 @@ class FileWatcher(BaseWatcher):
         log_file: PATH = None,
         log_level: str = None,
         with_webapp: bool = False,
+        delete: bool = False,
         **kwargs,
     ):
         self._config = config
-        self._web_app_host = host or 3001
-        self._web_app_port = port or "127.0.0.1"
+        self._web_app_host = host or "127.0.0.1"
+        self._web_app_port = port or 3001
         self._with_webapp = with_webapp
         self._log_file = log_file
         self._log_level = log_level
         self.unprocessed: Queue[Message] = Queue()
         self._router = router or DefaultRouter(workers=self.PROCESSORS_REGISTRY)
+        self._delete = delete
         super().__init__(**kwargs)
 
     def __post_init__(self) -> None:
@@ -84,6 +86,7 @@ class FileWatcher(BaseWatcher):
             # Share the same event loop between all dependencies so that we will not experiment wired
             # behaviors due to each dependency runs on it own event loop.
             p.loop = self.loop
+            p._delete = self._delete
             workers.append(p)
 
         return workers
@@ -177,6 +180,7 @@ class FileWatcher(BaseWatcher):
 
     def run(self):
         log_level = getattr(logging, self._log_level or "", logging.INFO)
+
         try:
             worker = mode.Worker(
                 self,
