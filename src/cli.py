@@ -9,7 +9,7 @@ from datetime import datetime
 from daemons import daemonizer
 
 from . import __version__
-from .config import Config
+from .config import Config, parse_logging_config
 from .exchange import FileWatcher
 from .utils import BASE_DIR, isfile, has_permission
 
@@ -102,6 +102,27 @@ def parse_argv(argv: list) -> argparse.Namespace:
     return parser.parse_args(argv), parser
 
 
+def setup_logging(args):
+
+    logging_config = parse_logging_config(BASE_DIR / "logging-config.yaml")
+
+    if logging_config and args.log_file:
+        logging_config["loggers"][""]["handlers"].append("file")
+        logging_config["handlers"]["file"]["filename"] = args.log_file
+
+    if logging_config and not args.log_file:
+        logging_config["handlers"].pop("file", None)
+
+    if logging_config and args.log_level:
+        for h in logging_config.get("handlers", []):
+            logging_config["handlers"][h]["level"] = args.log_level
+
+        for l in logging_config.get("loggers", []):
+            logging_config["loggers"][l]["level"] = args.log_level
+
+    logging.config.dictConfig(logging_config)
+
+
 def main():
     args, parser = parse_argv(sys.argv[1:])
     config = Config(args.config)()
@@ -110,9 +131,6 @@ def main():
     if not config:
         logger.error(f"The configuration file [{args.config}] is incorrectly formatted")
         return
-
-    if args.daemon and not args.log_file:
-        args.log_file = pathlib.Path.cwd() / "filedispatch.log"
 
     if args.daemon or args.exit:
         if not args.pidfile:
@@ -141,6 +159,8 @@ def main():
         log_level=args.log_level,
         with_webapp=args.with_webapp,
     )
+
+    setup_logging(args)
 
     if args.daemon or args.exit:
         demonic = daemonizer.run(pidfile=pidfile)(dispatcher.run)

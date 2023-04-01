@@ -1,0 +1,24 @@
+version: 1
+disable_existing_loggers: false
+handlers:
+  console:
+    class: logging.StreamHandler
+    formatter: default
+    level: INFO
+    stream: ext://sys.stdout
+  file:
+    class: logging.handlers.RotatingFileHandler
+    formatter: default
+    level: INFO
+    filename:
+    maxBytes: 1024
+    backupCount: 3
+formatters:
+  default:
+    format: '[%(asctime)s] [%(process)d] [%(levelname)]: %(message)s'
+    datefmt: '%Y-%m-%d %H:%M:%S'
+loggers:
+  '':
+    handlers: [console]
+    level: INFO
+    propagate: true
