@@ -10,7 +10,7 @@ from daemons import daemonizer
 
 from . import __version__
 from .config import Config
-from .watchers import FileWatcher
+from .exchange import FileWatcher
 from .utils import BASE_DIR, isfile, has_permission
 
 logger = logging.getLogger(__name__)

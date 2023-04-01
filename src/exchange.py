@@ -1,4 +1,3 @@
-import asyncio
 import os
 import logging
 import functools
@@ -11,7 +10,7 @@ from watchfiles import awatch, Change
 import aiofiles
 
 from src.api.server import WebServer
-from .processors import LocalStorageProcessor, FtpStorageProcessor, HttpStorageProcessor
+from .workers import FileWorker, FtpWorker, HttpWorker
 from .notifiers import Notifier
 from .utils import get_protocol, PATH
 from .config import Settings
@@ -28,9 +27,9 @@ class BaseWatcher(mode.Service):
     @classmethod
     def _register_processor(cls):
         cls.PROCESSORS_REGISTRY = dict(
-            file=LocalStorageProcessor(),
-            ftp=FtpStorageProcessor(),
-            http=HttpStorageProcessor(),
+            file=FileWorker(),
+            ftp=FtpWorker(),
+            http=HttpWorker(),
         )
 
 
@@ -56,7 +55,7 @@ class FileWatcher(BaseWatcher):
         super().__init__(**kwargs)
 
     def __post_init__(self) -> None:
-        self._init_processors()
+        self._init_workers()
         if self._with_webapp:
             self.add_dependency(self.server)
             self.logger.info("The webapp is enabled.")
@@ -72,12 +71,12 @@ class FileWatcher(BaseWatcher):
         dependencies += self.PROCESSORS_REGISTRY.values()
         return dependencies
 
-    def _init_processors(self) -> list[mode.ServiceT]:
-        processors = []
+    def _init_workers(self) -> list[mode.ServiceT]:
+        workers = []
         for p in self.PROCESSORS_REGISTRY.values():
             if self._with_webapp:
                 # FIXME: Perhaps only one Notify is suffisent ? It can be interesting
-                #  to consider if we are sure of less traffic between processors and notifier.
+                #  to consider if we are sure of less traffic between workers and notifier.
                 p.notifier = Notifier(
                     loop=self.loop,
                     host=self._web_app_host,
@@ -87,9 +86,9 @@ class FileWatcher(BaseWatcher):
             # Share the same event loop between all dependencies so that we will not experiment wired
             # behaviors due to each dependency runs on it own event loop.
             p.loop = self.loop
-            processors.append(p)
+            workers.append(p)
 
-        return processors
+        return workers
 
     async def on_started(self) -> None:
         if self._with_webapp:

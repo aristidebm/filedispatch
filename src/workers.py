@@ -25,7 +25,7 @@ copyfile = aiofiles_os.wrap(shutil.copyfile)
 unlink = aiofiles_os.wrap(os.unlink)
 
 
-class BaseStorageProcessor(mode.Service):
+class BaseWorker(mode.Service):
     abstract = True
 
     fancy_name: str = "Base Processor"
@@ -95,8 +95,8 @@ class BaseStorageProcessor(mode.Service):
         return super().add_dependency(service)
 
 
-class LocalStorageProcessor(BaseStorageProcessor):
-    fancy_name = "Local processor"
+class FileWorker(BaseWorker):
+    fancy_name = "File worker"
 
     async def process(self, filename, destination, delete=False, **kwargs):
 
@@ -120,8 +120,8 @@ class LocalStorageProcessor(BaseStorageProcessor):
             await self.consume()
 
 
-class HttpStorageProcessor(BaseStorageProcessor):
-    fancy_name = "HTTP processor"
+class HttpWorker(BaseWorker):
+    fancy_name = "HTTP worker"
 
     async def process(self, filename, destination, delete=False, **kwargs):
         with aiohttp.MultipartWriter() as writer:
@@ -160,8 +160,8 @@ class HttpStorageProcessor(BaseStorageProcessor):
             await self.consume()
 
 
-class FtpStorageProcessor(BaseStorageProcessor):
-    fancy_name = "FTP processor"
+class FtpWorker(BaseWorker):
+    fancy_name = "FTP worker"
 
     async def process(self, filename, destination, delete=False, **kwargs):
         # FIXME: move destination validation to the top level class and leave.

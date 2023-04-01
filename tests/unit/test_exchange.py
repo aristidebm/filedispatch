@@ -2,7 +2,7 @@ import asyncio
 from watchfiles import Change
 
 import pytest
-from src.watchers import FileWatcher
+from src.exchange import FileWatcher
 
 pytestmark = pytest.mark.watcher
 
@@ -26,8 +26,8 @@ class TestWatch:
     @pytest.mark.asyncio
     async def test_should_process_new_added_files(self, mocker, config, mock_awatch):
         sut = FileWatcher(config=config)
-        queue_put = mocker.patch("src.watchers.Queue.put")
-        mocker.patch("src.watchers.aiofiles.os.path.isfile", side_effect=[True])
+        queue_put = mocker.patch("src.exchange.Queue.put")
+        mocker.patch("src.exchange.aiofiles.os.path.isfile", side_effect=[True])
         filename = f"{str(config.source).removesuffix('/')}/filename.mp4"
         changes = {(Change.added, filename)}
         mock_awatch(changes)
@@ -41,8 +41,8 @@ class TestWatch:
         self, mocker, config, mock_awatch
     ):
         sut = FileWatcher(config=config)
-        queue_put = mocker.patch("src.watchers.Queue.put")
-        mocker.patch("src.watchers.aiofiles.os.path.isfile", side_effect=[False])
+        queue_put = mocker.patch("src.exchange.Queue.put")
+        mocker.patch("src.exchange.aiofiles.os.path.isfile", side_effect=[False])
 
         filename = f"{str(config.source).removesuffix('/')}/filename.mp4"
         changes = {(Change.added, filename)}
@@ -55,8 +55,8 @@ class TestWatch:
     @pytest.mark.asyncio
     async def test_should_perform_shallow_watching(self, config, mocker, mock_awatch):
         sut = FileWatcher(config=config)
-        queue_put = mocker.patch("src.watchers.Queue.put")
-        mocker.patch("src.watchers.aiofiles.os.path.isfile", side_effect=[True])
+        queue_put = mocker.patch("src.exchange.Queue.put")
+        mocker.patch("src.exchange.aiofiles.os.path.isfile", side_effect=[True])
         filename = f"{str(config.source).removesuffix('/')}/subdirectory/filename.mp4"
         changes = {(Change.added, filename)}
 
@@ -77,7 +77,7 @@ class TestWatch:
         processor2.acquire = mocker.MagicMock()
         processor3.acquire = mocker.MagicMock()
 
-        mocker.patch("src.watchers.aiofiles.os.path.isfile", side_effect=[True])
+        mocker.patch("src.exchange.aiofiles.os.path.isfile", side_effect=[True])
         filename = f"{str(config.source).removesuffix('/')}/filename.mp4"
         changes = {(Change.added, filename)}
 

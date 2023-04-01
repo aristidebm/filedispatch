@@ -4,11 +4,7 @@ from unittest import mock
 import aioftp
 import pytest
 
-from src.processors import (
-    LocalStorageProcessor,
-    HttpStorageProcessor,
-    FtpStorageProcessor,
-)
+from src.workers import FileWorker, HttpWorker, FtpWorker
 from src.utils import StatusEnum
 
 
@@ -23,15 +19,15 @@ def get_notifier_mock():
     return mock.PropertyMock(return_value=notifier)
 
 
-class TestLocalStorageProcessor:
+class TestFileWorker:
     @pytest.mark.asyncio
     async def test_local_storage_processing_succeeded(
         self, mocker, await_scheduled_task
     ):
-        sut = LocalStorageProcessor()
+        sut = FileWorker()
         filename, destination = "filename.mp4", "/tmp/destination"
-        copyfile = mocker.patch("src.processors.copyfile")
-        notify = mocker.patch("src.processors.LocalStorageProcessor._notify")
+        copyfile = mocker.patch("src.workers.copyfile")
+        notify = mocker.patch("src.workers.FileWorker._notify")
         await sut.process(filename, destination)
         copyfile.assert_awaited_once()
         assert copyfile.await_args[0] == (
@@ -50,13 +46,13 @@ class TestLocalStorageProcessor:
     async def test_local_processing_failed_for_lack_of_permissions(
         self, mocker, await_scheduled_task
     ):
-        sut = LocalStorageProcessor()
+        sut = FileWorker()
         filename, destination = "filename.mp4", "/tmp/destination"
         reason = "PermissionError: Permission Denied"
         copyfile = mocker.patch(
-            "src.processors.copyfile", side_effect=PermissionError(reason)
+            "src.workers.copyfile", side_effect=PermissionError(reason)
         )
-        notify = mocker.patch("src.processors.LocalStorageProcessor._notify")
+        notify = mocker.patch("src.workers.FileWorker._notify")
 
         await sut.process(filename, destination)
 
@@ -73,49 +69,45 @@ class TestLocalStorageProcessor:
 
     @pytest.mark.asyncio
     async def test_payload_is_sent_to_notifier(self, mocker, await_scheduled_task):
-        sut = LocalStorageProcessor()
+        sut = FileWorker()
         filename, destination = "filename.mp4", "/tmp/destination"
-        mocker.patch("src.processors.copyfile")
-        mocker.patch(
-            "src.processors.LocalStorageProcessor.notifier", new=get_notifier_mock()
-        )
+        mocker.patch("src.workers.copyfile")
+        mocker.patch("src.workers.FileWorker.notifier", new=get_notifier_mock())
         await sut.process(filename, destination)
         await await_scheduled_task()
         sut.notifier.acquire.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_should_remove_file_from_origin(self, mocker, await_scheduled_task):
-        sut = LocalStorageProcessor()
+        sut = FileWorker()
         filename, destination = "filename.mp4", "/tmp/destination"
-        mocker.patch("src.processors.copyfile")
-        mocker.patch(
-            "src.processors.LocalStorageProcessor.notifier", new=get_notifier_mock()
-        )
-        unlink = mocker.patch("src.processors.unlink")
+        mocker.patch("src.workers.copyfile")
+        mocker.patch("src.workers.FileWorker.notifier", new=get_notifier_mock())
+        unlink = mocker.patch("src.workers.unlink")
         await sut.process(filename, destination, delete=True)
         await await_scheduled_task()
         unlink.assert_awaited_once_with(filename)
 
 
-class TestHttpStorageProcessor:
+class TestHttpWorker:
     @pytest.mark.asyncio
     async def test_http_storage_processing_succeeded(
         self, mocker, await_scheduled_task
     ):
         # Arrange
-        sut = HttpStorageProcessor()
+        sut = HttpWorker()
         filename, destination = "filename.mp4", "https://server/documents/videos"
 
         # Mocks
-        send = mocker.patch("src.processors.RetryClient.post")
+        send = mocker.patch("src.workers.RetryClient.post")
         send.return_value.__aenter__.return_value.ok = True
-        writer = mocker.patch("src.processors.aiohttp.MultipartWriter")
+        writer = mocker.patch("src.workers.aiohttp.MultipartWriter")
         writer_obj = writer.return_value.__enter__.return_value
         writer_obj.append = mocker.MagicMock()
-        notify = mocker.patch("src.processors.HttpStorageProcessor._notify")
+        notify = mocker.patch("src.workers.HttpWorker._notify")
         content = io.StringIO()
         mock_open = mocker.patch(
-            "src.processors.aiofiles.open", new=mocker.AsyncMock(side_effect=[content])
+            "src.workers.aiofiles.open", new=mocker.AsyncMock(side_effect=[content])
         )
 
         # Act
@@ -132,19 +124,19 @@ class TestHttpStorageProcessor:
         self, mocker, await_scheduled_task
     ):
         # Arrange
-        sut = HttpStorageProcessor()
+        sut = HttpWorker()
         filename, destination = "filename.mp4", "https://server/documents/videos"
 
         # Mocks
-        send = mocker.patch("src.processors.RetryClient.post")
+        send = mocker.patch("src.workers.RetryClient.post")
         send.return_value.__aenter__.return_value.ok = False
-        writer = mocker.patch("src.processors.aiohttp.MultipartWriter")
+        writer = mocker.patch("src.workers.aiohttp.MultipartWriter")
         writer_obj = writer.return_value.__enter__.return_value
         writer_obj.append = mocker.MagicMock()
-        notify = mocker.patch("src.processors.HttpStorageProcessor._notify")
+        notify = mocker.patch("src.workers.HttpWorker._notify")
         content = io.StringIO()
         mock_open = mocker.patch(
-            "src.processors.aiofiles.open", new=mocker.AsyncMock(side_effect=[content])
+            "src.workers.aiofiles.open", new=mocker.AsyncMock(side_effect=[content])
         )
 
         # Act
@@ -163,19 +155,19 @@ class TestHttpStorageProcessor:
         self, mocker, await_scheduled_task
     ):
         # Arrange
-        sut = HttpStorageProcessor()
+        sut = HttpWorker()
         filename, destination = "filename.mp4", "https://server/documents/videos"
         reason = "PermissionError: Permission Denied"
 
         # Mocks
-        send = mocker.patch("src.processors.RetryClient.post")
+        send = mocker.patch("src.workers.RetryClient.post")
         send.return_value.__aenter__.return_value.ok = True
-        writer = mocker.patch("src.processors.aiohttp.MultipartWriter")
+        writer = mocker.patch("src.workers.aiohttp.MultipartWriter")
         writer_obj = writer.return_value.__enter__.return_value
         writer_obj.append = mocker.MagicMock()
-        notify = mocker.patch("src.processors.HttpStorageProcessor._notify")
+        notify = mocker.patch("src.workers.HttpWorker._notify")
         mock_open = mocker.patch(
-            "src.processors.aiofiles.open",
+            "src.workers.aiofiles.open",
             new=mocker.AsyncMock(side_effect=[PermissionError(reason)]),
         )
 
@@ -198,22 +190,20 @@ class TestHttpStorageProcessor:
         self, mocker, config, filesystem, aiohttp_server, await_scheduled_task
     ):
         # Arrange
-        sut = HttpStorageProcessor()
+        sut = HttpWorker()
         filename, destination = "filename.mp4", "https://server/documents/videos"
 
         # Mocks
-        send = mocker.patch("src.processors.RetryClient.post")
+        send = mocker.patch("src.workers.RetryClient.post")
         send.return_value.__aenter__.return_value.ok = True
-        writer = mocker.patch("src.processors.aiohttp.MultipartWriter")
+        writer = mocker.patch("src.workers.aiohttp.MultipartWriter")
         writer_obj = writer.return_value.__enter__.return_value
         writer_obj.append = mocker.MagicMock()
         content = io.StringIO()
         mocker.patch(
-            "src.processors.aiofiles.open", new=mocker.AsyncMock(side_effect=[content])
+            "src.workers.aiofiles.open", new=mocker.AsyncMock(side_effect=[content])
         )
-        mocker.patch(
-            "src.processors.HttpStorageProcessor.notifier", new=get_notifier_mock()
-        )
+        mocker.patch("src.workers.HttpWorker.notifier", new=get_notifier_mock())
 
         # Act
         await sut.process(filename, destination)
@@ -223,11 +213,11 @@ class TestHttpStorageProcessor:
         sut.notifier.acquire.assert_called_once()
 
 
-class TestFtpStorageProcessor:
+class TestFtpWorker:
     @pytest.mark.asyncio
     async def test_ftp_storage_processing_succeeded(self, mocker, await_scheduled_task):
         # Arrange
-        sut = FtpStorageProcessor()
+        sut = FtpWorker()
         filename, destination = (
             "filename.mp4",
             "ftp://username:password@ftp.foo.org/home/user/videos",
@@ -237,7 +227,7 @@ class TestFtpStorageProcessor:
         uploader = mocker.patch("aioftp.Client.context")
         uploader_obj = uploader.return_value.__aenter__.return_value
         uploader_obj.upload = mocker.AsyncMock()
-        notify = mocker.patch("src.processors.FtpStorageProcessor._notify")
+        notify = mocker.patch("src.workers.FtpWorker._notify")
 
         # Act
         await sut.process(filename, destination)
@@ -250,7 +240,7 @@ class TestFtpStorageProcessor:
         self, mocker, await_scheduled_task
     ):
         # Arrange
-        sut = FtpStorageProcessor()
+        sut = FtpWorker()
         filename, destination = (
             "filename.mp4",
             "ftp://username:password@ftp.foo.org/home/user/videos",
@@ -260,7 +250,7 @@ class TestFtpStorageProcessor:
         uploader = mocker.patch("aioftp.Client.context")
         uploader_obj = uploader.return_value.__aenter__.return_value
         uploader_obj.upload = mocker.AsyncMock(side_effect=[aioftp.AIOFTPException()])
-        notify = mocker.patch("src.processors.FtpStorageProcessor._notify")
+        notify = mocker.patch("src.workers.FtpWorker._notify")
 
         # Act
         await sut.process(filename, destination)
@@ -273,7 +263,7 @@ class TestFtpStorageProcessor:
     @pytest.mark.asyncio
     async def test_payload_is_sent_to_notifier(self, mocker, await_scheduled_task):
         # Arrange
-        sut = FtpStorageProcessor()
+        sut = FtpWorker()
         filename, destination = (
             "filename.mp4",
             "ftp://username:password@ftp.foo.org/home/user/videos",
@@ -284,9 +274,7 @@ class TestFtpStorageProcessor:
         uploader_obj = uploader.return_value.__aenter__.return_value
         uploader_obj.upload = mocker.AsyncMock()
 
-        mocker.patch(
-            "src.processors.FtpStorageProcessor.notifier", new=get_notifier_mock()
-        )
+        mocker.patch("src.workers.FtpWorker.notifier", new=get_notifier_mock())
 
         await sut.process(filename, destination)
         uploader_obj.upload.assert_awaited_once_with(filename, destination)

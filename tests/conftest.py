@@ -92,7 +92,7 @@ def await_scheduled_task():
 
 @pytest.fixture
 def mock_awatch(mocker):
-    mock_awatch = mocker.patch("src.watchers.awatch")
+    mock_awatch = mocker.patch("src.exchange.awatch")
     _changes: Set[Tuple[Change, str]] = set()  # changes must be set
 
     async def _mock(conf):

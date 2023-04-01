@@ -19,7 +19,7 @@ to some configured destination.
 │   ├── config.py
 │   ├── __init__.py
 │   ├── notifiers.py
-│   ├── processors.py
+│   ├── workers.py
 │   ├── schema.py
 │   ├── utils.py
 │   └── watchers.py
@@ -33,7 +33,7 @@ to some configured destination.
 │   ├── __init__.py
 │   ├── test_config.py
 │   ├── test_notifiers.py
-│   ├── test_processors.py
+│   ├── test_workers.py
 │   ├── test_utils.py
 │   └── test_watchers.py
 ├── CHANGELOG.md
