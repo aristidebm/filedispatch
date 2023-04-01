@@ -34,7 +34,9 @@ class TestWatch:
 
         async with sut:
             await asyncio.sleep(0)
-            queue_put.assert_awaited_once_with((filename, mocker.ANY))
+            queue_put.asset_awaited_once()
+            message = queue_put.await_args.args[0]
+            assert message.body.get("filename") == filename
 
     @pytest.mark.asyncio
     async def test_should_ignore_directories_and_symlinks(
@@ -84,7 +86,9 @@ class TestWatch:
         mock_awatch(changes)
         async with sut:
             await asyncio.sleep(0.1)
-            processor1.acquire.assert_called_once_with(filename, mocker.ANY)
+            processor1.acquire.assert_called_once()
+            message = processor1.acquire.call_args.args[0]
+            assert message.body.get("filename") == filename
             processor2.acquire.assert_not_called()
             processor3.acquire.assert_not_called()
 

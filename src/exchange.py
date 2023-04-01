@@ -1,7 +1,6 @@
 import os
 import logging
 import functools
-from typing import Tuple
 from pathlib import Path
 from asyncio import Queue
 
@@ -12,7 +11,8 @@ import aiofiles
 from src.api.server import WebServer
 from .workers import FileWorker, FtpWorker, HttpWorker
 from .notifiers import Notifier
-from .utils import get_protocol, PATH
+from .utils import PATH, Message, create_message
+from .routers import Router, DefaultRouter
 from .config import Settings
 
 logger = logging.getLogger(__name__)
@@ -37,6 +37,7 @@ class FileWatcher(BaseWatcher):
     def __init__(
         self,
         config: Settings,
+        router: Router | None = None,
         *,
         host: str = None,
         port: int = None,
@@ -51,7 +52,8 @@ class FileWatcher(BaseWatcher):
         self._with_webapp = with_webapp
         self._log_file = log_file
         self._log_level = log_level
-        self.unprocessed: Queue[Tuple[PATH, PATH]] | None = None
+        self.unprocessed: Queue[Message] = Queue()
+        self._router = router or DefaultRouter(workers=self.PROCESSORS_REGISTRY)
         super().__init__(**kwargs)
 
     def __post_init__(self) -> None:
@@ -61,10 +63,6 @@ class FileWatcher(BaseWatcher):
             self.logger.info("The webapp is enabled.")
         else:
             self.logger.info("The webapp is disabled.")
-
-    async def on_start(self):
-        self.unprocessed = Queue()
-        await super().on_start()
 
     def on_init_dependencies(self):
         dependencies = super().on_init_dependencies()
@@ -103,13 +101,14 @@ class FileWatcher(BaseWatcher):
         for ext in supported:
             # glob doesn't support multiple extension globing
             for filename in Path(self._config.source).glob(f"*.{ext}"):
-                dest = self._find_destination(filename, config, supported)
+                destination = self._search_destination(filename, config, supported)
 
-                if not dest or filename in collected:
+                if not destination or filename in collected:
                     continue
 
                 collected.append(filename)
-                await self.unprocessed.put((filename, dest))
+                msg = self.create_message(filename, destination)
+                await self.unprocessed.put(msg)
                 self.logger.debug(f"File {filename} is appended to be processed")
 
     @functools.cached_property
@@ -141,32 +140,29 @@ class FileWatcher(BaseWatcher):
                 if not await aiofiles.os.path.isfile(filename):
                     continue
 
-                dest = self._find_destination(filename, config=config)
+                # FIXME: find_destination should be moved to config service.
+                destination = self._search_destination(filename, config=config)
 
-                if not dest:
+                if not destination:
                     continue
 
-                # we don't need this to be completed before we continue, so we don't need to block uselessly.
-                await self.unprocessed.put((filename, dest))
-                self.logger.info(f"File {filename} is appended to be processed")
+                msg = self.create_message(filename, destination)
+                await self.unprocessed.put(msg)
+                self.logger.info(f"The file {filename} is received.")
 
     @mode.Service.task
     async def _provide(self):
         while not self.should_stop:
-            filename, destination = await self.unprocessed.get()
-            processor = self._get_processor(destination)
-            # start the processor if not yet started.
-            await processor.maybe_start()
-            processor.acquire(filename, destination)
+            message = await self.unprocessed.get()
+            await self._router.route(message)
             self.unprocessed.task_done()
             await self.sleep(1.0)
 
-    def _get_processor(self, destination, **kwargs):
-        processor = self.PROCESSORS_REGISTRY[get_protocol(destination)]
-        self.logger.info(f"{processor.fancy_name} is used to process {destination}")
-        return processor
+    @staticmethod
+    def create_message(filename, destination):
+        return create_message(filename, destination)
 
-    def _find_destination(self, filename: PATH, config=None, mapping=None) -> PATH:
+    def _search_destination(self, filename: PATH, config=None, mapping=None) -> PATH:
         mapping = mapping or {}
         config = config or self._config
         _, ext = os.path.splitext(filename)

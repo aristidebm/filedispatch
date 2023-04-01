@@ -15,7 +15,7 @@ class WriteOnlyLogEntry(BaseModel):
     source: Path
     destination: Union[Path, HttpUrl, FtpUrl]
     extension: constr(max_length=20)
-    processor: constr(max_length=255)
+    worker: constr(max_length=255)
     protocol: ProtocolEnum
     status: StatusEnum
     size: Optional[constr(regex=r"^\d*\.?\d* (KB|MB|GB|TB)$")] = Field(  # noqa F722

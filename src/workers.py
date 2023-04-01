@@ -14,15 +14,16 @@ import aiofiles
 import aiofiles.os as aiofiles_os
 from aiohttp_retry import RetryClient
 
-from .utils import (
-    PATH,
-    get_payload,
-    FtpUrl,
-    StatusEnum,
-)
+from .utils import PATH, get_payload, FtpUrl, StatusEnum, Message
 
 copyfile = aiofiles_os.wrap(shutil.copyfile)
 unlink = aiofiles_os.wrap(os.unlink)
+
+
+def is_processable(message: Message):
+    filename = message.body.get("filename")
+    destination = message.body.get("destination")
+    return filename and destination
 
 
 class BaseWorker(mode.Service):
@@ -32,18 +33,16 @@ class BaseWorker(mode.Service):
 
     def __init__(self, notifier=None, **kwargs):
         self._notifier = notifier
-        self.unprocessed: Queue[Tuple[PATH, PATH]] | None = None
+        self.unprocessed: Queue[Message] = Queue()
         super().__init__(**kwargs)
 
     async def on_start(self) -> None:
-        await super().on_start()
-        self.unprocessed = Queue()
         self.add_dependency(self.notifier)
+        await super().on_start()
 
     async def _notify(
         self,
-        filename,
-        destination,
+        message,
         status,
         reason=None,
         delete=False,
@@ -51,6 +50,9 @@ class BaseWorker(mode.Service):
     ):
         if not self.notifier:
             return
+
+        filename = message.body.get("filename")
+        destination = message.body.get("destination")
 
         try:
             payload = await get_payload(
@@ -65,6 +67,7 @@ class BaseWorker(mode.Service):
 
         if delete and status != StatusEnum.FAILED:
             try:
+                filename = message.body.get("filename") or ""
                 await unlink(filename)
             except OSError as exp:
                 self.logger.debug(exp)
@@ -78,16 +81,16 @@ class BaseWorker(mode.Service):
         self._notifier = notifier
 
     @abc.abstractmethod
-    async def process(self, filename, destination, delete=False, **kwargs):
+    async def process(self, message: Message, delete=False, **kwargs):
         pass
 
     async def consume(self, **kwargs):
-        filename, destination = await self.unprocessed.get()
-        asyncio.create_task(self.process(filename, destination, **kwargs))
+        message = await self.unprocessed.get()
+        asyncio.create_task(self.process(message, **kwargs))
         await self.sleep(1.0)
 
-    def acquire(self, filename: PATH, destination: PATH, **kwargs) -> None:
-        asyncio.create_task(self.unprocessed.put((filename, destination)))
+    def acquire(self, message: Message, **kwargs) -> None:
+        asyncio.create_task(self.unprocessed.put(message))
 
     def add_dependency(self, service):
         if not service:
@@ -98,21 +101,25 @@ class BaseWorker(mode.Service):
 class FileWorker(BaseWorker):
     fancy_name = "File worker"
 
-    async def process(self, filename, destination, delete=False, **kwargs):
+    async def process(self, message, delete=False, **kwargs):
+
+        if not is_processable(message):
+            return
+
+        filename = message.body.get("filename")
+        destination = message.body.get("destination")
 
         try:
             basename = os.path.basename(filename)
             await copyfile(filename, os.path.join(destination, basename))
             self.logger.info(f"File {filename} moved to {destination}")
             asyncio.create_task(
-                self._notify(filename, destination, StatusEnum.SUCCEEDED, delete=delete)
+                self._notify(message, StatusEnum.SUCCEEDED, delete=delete)
             )
         except OSError as exp:
             self.logger.exception(exp)
             reason = " ".join([str(arg) for arg in exp.args])
-            asyncio.create_task(
-                self._notify(filename, destination, StatusEnum.FAILED, reason)
-            )
+            asyncio.create_task(self._notify(message, StatusEnum.FAILED, reason))
 
     @mode.Service.task
     async def _consume(self):
@@ -123,7 +130,14 @@ class FileWorker(BaseWorker):
 class HttpWorker(BaseWorker):
     fancy_name = "HTTP worker"
 
-    async def process(self, filename, destination, delete=False, **kwargs):
+    async def process(self, message, delete=False, **kwargs):
+
+        if not is_processable(message):
+            return
+
+        filename = message.body.get("filename")
+        destination = message.body.get("destination")
+
         with aiohttp.MultipartWriter() as writer:
             try:
                 # FIXME: The content getter must depend on the file size,
@@ -132,20 +146,18 @@ class HttpWorker(BaseWorker):
             except OSError as exp:
                 self.logger.exception(exp)
                 reason = " ".join([str(arg) for arg in exp.args])
-                await self._notify(filename, destination, StatusEnum.FAILED, reason)
+                await self._notify(message, StatusEnum.FAILED, reason)
                 return
 
             async with RetryClient() as client:
                 async with client.post(destination, data=writer) as response:
                     if response.ok:
-                        await self._notify(filename, destination, StatusEnum.SUCCEEDED)
+                        await self._notify(message, StatusEnum.SUCCEEDED)
                     else:
                         reason = await response.text()
                         reason = f"{response.status} {response.reason}\n\n{reason}"
                         self.logger.debug(reason)
-                        await self._notify(
-                            filename, destination, StatusEnum.FAILED, reason
-                        )
+                        await self._notify(message, StatusEnum.FAILED, reason)
 
     async def _send_chunk(self, filename):  # useful for big files
         async with aiofiles.open(filename, "rb") as f:
@@ -163,8 +175,13 @@ class HttpWorker(BaseWorker):
 class FtpWorker(BaseWorker):
     fancy_name = "FTP worker"
 
-    async def process(self, filename, destination, delete=False, **kwargs):
-        # FIXME: move destination validation to the top level class and leave.
+    async def process(self, message, delete=False, **kwargs):
+
+        if not is_processable(message):
+            return
+
+        filename = message.body.get("filename")
+        destination = message.body.get("destination")
 
         try:
             scheme = parse_obj_as(FtpUrl, destination)
@@ -176,21 +193,21 @@ class FtpWorker(BaseWorker):
             return
 
         async with aioftp.Client.context(
-            scheme.host, port=scheme.path, user=scheme.user, password=scheme.password
+            scheme.host, port=scheme.port, user=scheme.user, password=scheme.password
         ) as client:
             try:
                 await client.upload(filename, destination)
-                await self._notify(filename, destination, StatusEnum.SUCCEEDED)
+                await self._notify(message, StatusEnum.SUCCEEDED)
             except aioftp.StatusCodeError as exp:
                 self.logger.warning(exp)
                 self.logger.debug(exp, stack_info=True)
                 reason = f"Received {exp.received_codes}\n\nExpected{exp.expected_codes}\n\n{exp.info}"
-                await self._notify(filename, destination, StatusEnum.FAILED, reason)
+                await self._notify(message, StatusEnum.FAILED, reason)
             except aioftp.AIOFTPException as exp:
                 self.logger.warning(exp)
                 self.logger.debug(exp, stack_info=True)
                 reason = f"{exp}"
-                await self._notify(filename, destination, StatusEnum.FAILED, reason)
+                await self._notify(message, StatusEnum.FAILED, reason)
 
     @mode.Service.task
     async def _consume(self):

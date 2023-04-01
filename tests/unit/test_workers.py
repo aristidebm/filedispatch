@@ -5,7 +5,7 @@ import aioftp
 import pytest
 
 from src.workers import FileWorker, HttpWorker, FtpWorker
-from src.utils import StatusEnum
+from src.utils import StatusEnum, Message, create_message
 
 
 pytestmark = pytest.mark.process
@@ -28,7 +28,8 @@ class TestFileWorker:
         filename, destination = "filename.mp4", "/tmp/destination"
         copyfile = mocker.patch("src.workers.copyfile")
         notify = mocker.patch("src.workers.FileWorker._notify")
-        await sut.process(filename, destination)
+        msg = create_message(filename, destination)
+        await sut.process(msg)
         copyfile.assert_awaited_once()
         assert copyfile.await_args[0] == (
             filename,
@@ -37,8 +38,7 @@ class TestFileWorker:
         await await_scheduled_task()
         notify.assert_awaited_once()
         assert notify.await_args[0] == (
-            filename,
-            destination,
+            msg,
             StatusEnum.SUCCEEDED,
         )
 
@@ -53,19 +53,15 @@ class TestFileWorker:
             "src.workers.copyfile", side_effect=PermissionError(reason)
         )
         notify = mocker.patch("src.workers.FileWorker._notify")
-
-        await sut.process(filename, destination)
+        msg = create_message(filename, destination)
+        await sut.process(msg)
 
         copyfile.assert_awaited_once_with(
             filename,
             f"{destination}/{filename}",
         )
-
         await await_scheduled_task()
-
-        notify.assert_awaited_once_with(
-            filename, destination, StatusEnum.FAILED, reason
-        )
+        notify.assert_awaited_once_with(msg, StatusEnum.FAILED, reason)
 
     @pytest.mark.asyncio
     async def test_payload_is_sent_to_notifier(self, mocker, await_scheduled_task):
@@ -73,7 +69,8 @@ class TestFileWorker:
         filename, destination = "filename.mp4", "/tmp/destination"
         mocker.patch("src.workers.copyfile")
         mocker.patch("src.workers.FileWorker.notifier", new=get_notifier_mock())
-        await sut.process(filename, destination)
+        msg = create_message(filename, destination)
+        await sut.process(msg)
         await await_scheduled_task()
         sut.notifier.acquire.assert_called_once()
 
@@ -84,7 +81,8 @@ class TestFileWorker:
         mocker.patch("src.workers.copyfile")
         mocker.patch("src.workers.FileWorker.notifier", new=get_notifier_mock())
         unlink = mocker.patch("src.workers.unlink")
-        await sut.process(filename, destination, delete=True)
+        msg = create_message(filename, destination)
+        await sut.process(msg, delete=True)
         await await_scheduled_task()
         unlink.assert_awaited_once_with(filename)
 
@@ -111,13 +109,14 @@ class TestHttpWorker:
         )
 
         # Act
-        await sut.process(filename, destination)
+        msg = create_message(filename, destination)
+        await sut.process(msg)
 
         # Assert
         mock_open.assert_awaited_once_with(filename, "rb")
         writer_obj.append.assert_called_once_with(content)
         await await_scheduled_task()
-        notify.assert_awaited_once_with(filename, destination, StatusEnum.SUCCEEDED)
+        notify.assert_awaited_once_with(msg, StatusEnum.SUCCEEDED)
 
     @pytest.mark.asyncio
     async def test_should_log_failure_when_error_occurred_while_sending_file_on_destination_server(
@@ -140,15 +139,14 @@ class TestHttpWorker:
         )
 
         # Act
-        await sut.process(filename, destination)
+        msg = create_message(filename, destination)
+        await sut.process(msg)
 
         # Assert
         mock_open.assert_awaited_once_with(filename, "rb")
         writer_obj.append.assert_called_once_with(content)
         await await_scheduled_task()
-        notify.assert_awaited_once_with(
-            filename, destination, StatusEnum.FAILED, mocker.ANY
-        )
+        notify.assert_awaited_once_with(msg, StatusEnum.FAILED, mocker.ANY)
 
     @pytest.mark.asyncio
     async def test_should_log_failure_when_unable_to_read_the_source_file(
@@ -172,15 +170,15 @@ class TestHttpWorker:
         )
 
         # Act
-        await sut.process(filename, destination)
+        msg = create_message(filename, destination)
+        await sut.process(msg)
 
         # Assert
         mock_open.assert_awaited_once_with(filename, "rb")
         writer_obj.append.assert_not_called()
         await await_scheduled_task()
         notify.assert_awaited_once_with(
-            filename,
-            destination,
+            msg,
             StatusEnum.FAILED,
             "PermissionError: Permission Denied",
         )
@@ -206,7 +204,8 @@ class TestHttpWorker:
         mocker.patch("src.workers.HttpWorker.notifier", new=get_notifier_mock())
 
         # Act
-        await sut.process(filename, destination)
+        msg = create_message(filename, destination)
+        await sut.process(msg)
         await await_scheduled_task()
 
         # Assert
@@ -230,10 +229,11 @@ class TestFtpWorker:
         notify = mocker.patch("src.workers.FtpWorker._notify")
 
         # Act
-        await sut.process(filename, destination)
+        msg = create_message(filename, destination)
+        await sut.process(msg)
         uploader_obj.upload.assert_awaited_once_with(filename, destination)
         await await_scheduled_task()
-        notify.assert_awaited_once_with(filename, destination, StatusEnum.SUCCEEDED)
+        notify.assert_awaited_once_with(msg, StatusEnum.SUCCEEDED)
 
     @pytest.mark.asyncio
     async def test_should_log_failure_when_error_occurred_while_sending_file_on_destination_server(
@@ -253,12 +253,11 @@ class TestFtpWorker:
         notify = mocker.patch("src.workers.FtpWorker._notify")
 
         # Act
-        await sut.process(filename, destination)
+        msg = create_message(filename, destination)
+        await sut.process(msg)
         uploader_obj.upload.assert_awaited_once_with(filename, destination)
         await await_scheduled_task()
-        notify.assert_awaited_once_with(
-            filename, destination, StatusEnum.FAILED, mocker.ANY
-        )
+        notify.assert_awaited_once_with(msg, StatusEnum.FAILED, mocker.ANY)
 
     @pytest.mark.asyncio
     async def test_payload_is_sent_to_notifier(self, mocker, await_scheduled_task):
@@ -275,8 +274,8 @@ class TestFtpWorker:
         uploader_obj.upload = mocker.AsyncMock()
 
         mocker.patch("src.workers.FtpWorker.notifier", new=get_notifier_mock())
-
-        await sut.process(filename, destination)
+        msg = create_message(filename, destination)
+        await sut.process(msg)
         uploader_obj.upload.assert_awaited_once_with(filename, destination)
         await await_scheduled_task()
         sut.notifier.acquire.assert_called_once()

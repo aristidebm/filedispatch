@@ -1,6 +1,8 @@
 import json
 import math
 import os
+import dataclasses
+import uuid
 from enum import Enum
 from typing import Union
 from pathlib import Path
@@ -25,7 +27,15 @@ __all__ = [
     "ProtocolEnum",
     "OrderingEnum",
     "move_dict_key_to_top",
+    "Message",
 ]
+
+
+@dataclasses.dataclass(frozen=True)
+class Message:
+    body: dict
+    headers: dict = dataclasses.field(default_factory=dict)
+    id: uuid.UUID = dataclasses.field(default_factory=uuid.uuid4)
 
 
 class FtpUrl(AnyUrl):
@@ -128,7 +138,7 @@ async def get_payload(filename, destination, status, processor, reason=None):
             destination=str(destination),
             source=os.path.dirname(filename),
             extension=extension,
-            processor=processor,
+            worker=processor,
             protocol=ProtocolEnum[get_protocol(destination)],
             status=status,
             size=_size,
@@ -148,3 +158,7 @@ def isfile(filename):
 
 def has_permission(filename, mode):
     return os.access(filename, mode)
+
+
+def create_message(filename, destination):
+    return Message(body=dict(filename=filename, destination=destination))

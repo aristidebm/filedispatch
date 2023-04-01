@@ -3,15 +3,11 @@
 # This must be a service, notify method put payload in a queue, and a background task send informations to the API.
 import asyncio
 import json
-from functools import cached_property
 from asyncio import Queue
 
+import mode
 from aiohttp import ClientError
 from aiohttp_retry import RetryClient
-
-import mode
-
-from .utils import JSON_CONTENT_TYPE
 
 
 class Notifier(mode.Service):
@@ -27,12 +23,8 @@ class Notifier(mode.Service):
         host = host and host.strip("/")
         path = path.strip("/")
         self.url = f"{scheme}://{host}:{port}/{path}"
-        self.unprocessed: Queue | None = None
+        self.unprocessed: Queue[dict] = Queue()
         super().__init__(*args, **kwargs)
-
-    async def on_start(self) -> None:
-        self.unprocessed = Queue()
-        await super().on_start()
 
     def acquire(self, payload, **kwargs):
         asyncio.create_task(self.unprocessed.put(payload))
