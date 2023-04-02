@@ -1,6 +1,8 @@
 import json
 import math
 import os
+import dataclasses
+import uuid
 from enum import Enum
 from typing import Union
 from pathlib import Path
@@ -10,7 +12,7 @@ from pydantic import (
     parse_obj_as,
     HttpUrl,
     FileUrl,
-    stricturl,
+    AnyUrl,
     error_wrappers,
 )
 
@@ -25,9 +27,28 @@ __all__ = [
     "ProtocolEnum",
     "OrderingEnum",
     "move_dict_key_to_top",
+    "Message",
 ]
 
-FtpUrl = stricturl(allowed_schemes=["ftp", "sftp"])
+
+@dataclasses.dataclass(frozen=True)
+class Message:
+    body: dict
+    headers: dict = dataclasses.field(default_factory=dict)
+    id: uuid.UUID = dataclasses.field(default_factory=uuid.uuid4)
+
+
+class FtpUrl(AnyUrl):
+    # https://docs.bmc.com/docs/bcm126/en/ftp-specific-scheme-738017959.html
+    allowed_schemes = ["ftp", "sftp"]
+    max_length = 2083  # url maximum length.
+    hidden_parts = {"port"}  # don't include default port in url built.
+
+    @staticmethod
+    def get_default_parts(parts):
+        return {"port": "21" if parts["scheme"] == "ftp" else "22"}
+
+
 FIELDS = dict(file=FileUrl, http=HttpUrl, ftp=FtpUrl)
 PATH = Union[str, Path]
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -100,7 +121,7 @@ async def get_filesize(filename):
 
 
 async def get_payload(filename, destination, status, processor, reason=None):
-    import src.schema  # FIXME: Fix it just temporary solution
+    import src.schemas  # FIXME: Fix it just temporary solution
 
     extension = os.path.splitext(filename)[1].removeprefix(".")
 
@@ -112,12 +133,12 @@ async def get_payload(filename, destination, status, processor, reason=None):
         _byte_size = None
 
     return json.loads(
-        src.schema.WriteOnlyLogEntry(
+        src.schemas.WriteOnlyLogEntry(
             filename=os.path.basename(filename),
             destination=str(destination),
             source=os.path.dirname(filename),
             extension=extension,
-            processor=processor,
+            worker=processor,
             protocol=ProtocolEnum[get_protocol(destination)],
             status=status,
             size=_size,
@@ -132,8 +153,12 @@ def move_dict_key_to_top(data, key):
 
 
 def isfile(filename):
-    return os.path.isfile(filename)
+    return os.path.isfile(filename) and not os.path.islink(filename)
 
 
 def has_permission(filename, mode):
     return os.access(filename, mode)
+
+
+def create_message(filename, destination):
+    return Message(body=dict(filename=filename, destination=destination))

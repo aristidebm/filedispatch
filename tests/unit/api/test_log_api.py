@@ -16,8 +16,10 @@ BASE_URL = Path(__file__).parent.parent.parent
 
 
 @pytest_asyncio.fixture
-async def client(aiohttp_client):
-    app = make_app(db=BASE_URL / "test_db.sqlite3")
+async def client(aiohttp_client, tmp_path):
+    db = tmp_path / "test-db.sqlite3"
+    db.touch()
+    app = make_app(db=db)
     dao = app["dao"]
     await dao.create_table()
     clt = await aiohttp_client(app)
@@ -38,7 +40,7 @@ async def test_create_log_entry(client):
     assert data["filename"] == payload["filename"]
     assert data["source"] == payload["source"]
     assert data["destination"] == payload["destination"]
-    assert data["processor"] == payload["processor"]
+    assert data["worker"] == payload["worker"]
     assert data["protocol"] == payload["protocol"]
     assert data["status"] == payload["status"]
     assert data["size"] == payload["size"]
@@ -64,7 +66,7 @@ async def test_get_all_log_entries(client):
     assert data["filename"] == payload["filename"]
     assert data["source"] == payload["source"]
     assert data["destination"] == payload["destination"]
-    assert data["processor"] == payload["processor"]
+    assert data["worker"] == payload["worker"]
     assert data["protocol"] == payload["protocol"]
     assert data["status"] == payload["status"]
     assert data["size"] == payload["size"]
@@ -92,7 +94,7 @@ async def test_get_log_entries_by_status(client):
     assert data["filename"] == payload["filename"]
     assert data["source"] == payload["source"]
     assert data["destination"] == payload["destination"]
-    assert data["processor"] == payload["processor"]
+    assert data["worker"] == payload["worker"]
     assert data["protocol"] == payload["protocol"]
     assert data["status"] == payload["status"]
     assert data["size"] == payload["size"]
@@ -132,7 +134,7 @@ async def test_get_log_entries_by_destination(client):
     assert data["filename"] == payload["filename"]
     assert data["source"] == payload["source"]
     assert data["destination"] == payload["destination"]
-    assert data["processor"] == payload["processor"]
+    assert data["worker"] == payload["worker"]
     assert data["protocol"] == payload["protocol"]
     assert data["status"] == payload["status"]
     assert data["size"] == payload["size"]
@@ -166,7 +168,7 @@ async def test_get_log_entries_by_protocol(client):
     assert data["filename"] == payload["filename"]
     assert data["source"] == payload["source"]
     assert data["destination"] == payload["destination"]
-    assert data["processor"] == payload["processor"]
+    assert data["worker"] == payload["worker"]
     assert data["protocol"] == payload["protocol"]
     assert data["status"] == payload["status"]
     assert data["size"] == payload["size"]
@@ -200,7 +202,7 @@ async def test_get_log_entries_by_created(client):
     assert data["filename"] == payload["filename"]
     assert data["source"] == payload["source"]
     assert data["destination"] == payload["destination"]
-    assert data["processor"] == payload["processor"]
+    assert data["worker"] == payload["worker"]
     assert data["protocol"] == payload["protocol"]
     assert data["status"] == payload["status"]
     assert data["size"] == payload["size"]
@@ -257,7 +259,7 @@ async def test_get_log_entries_by_byte_size(client):
     assert data["filename"] == payload["filename"]
     assert data["source"] == payload["source"]
     assert data["destination"] == payload["destination"]
-    assert data["processor"] == payload["processor"]
+    assert data["worker"] == payload["worker"]
     assert data["protocol"] == payload["protocol"]
     assert data["status"] == payload["status"]
     assert data["size"] == payload["size"]
@@ -368,7 +370,7 @@ async def test_get_log_entry_by_id(client):
     assert data["filename"] == payload["filename"]
     assert data["source"] == payload["source"]
     assert data["destination"] == payload["destination"]
-    assert data["processor"] == payload["processor"]
+    assert data["worker"] == payload["worker"]
     assert data["protocol"] == payload["protocol"]
     assert data["status"] == payload["status"]
     assert data["size"] == payload["size"]

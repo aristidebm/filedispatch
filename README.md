@@ -1,53 +1,40 @@
 # File Dispatch
 
-File dispatch is an [asyncio](https://docs.python.org/3.9/library/asyncio.html) based directory watcher that 
-basically watch a directory for some configured file extension and send the received file
-to some configured destination.
+**filedispath** is a simple, configurable, async based and user-friendly cli app
+for automatic file organization. It listens to a configured source folder for
+new files and copy or move them to the appropriate destination according to
+the configuration file.
+
 
 ## Project structure
+
 ```
-.
-├── docs
-│   ├── filedispatch-architecute.png
+├── src
 │   ├── api
-│   │   ├── __init__.py
-│   │   ├── models.py
-│   │   ├── queries.py
-│   │   ├── server.py
-│   │   └── views.py
 │   ├── cli.py
 │   ├── config.py
-│   ├── __init__.py
+│   ├── exchange.py
 │   ├── notifiers.py
-│   ├── processors.py
-│   ├── schema.py
+│   ├── routers.py
+│   ├── schemas.py
 │   ├── utils.py
-│   └── watchers.py
+│   └── workers.py
 ├── tests
-│   ├── api
-│   │   ├── __init__.py
-│   │   └── test_log_api.py
+│   ├── integration
+│   ├── unit
 │   ├── base.py
 │   ├── conftest.py
 │   ├── factories.py
-│   ├── __init__.py
-│   ├── test_config.py
-│   ├── test_notifiers.py
-│   ├── test_processors.py
-│   ├── test_utils.py
-│   └── test_watchers.py
 ├── CHANGELOG.md
 ├── config.example.yml
 ├── CONTRIBUTE.md
-├── db.sqlite3
 ├── LICENCE
 ├── Makefile
 ├── poetry.lock
 ├── pyproject.toml
 ├── pytest.ini
 ├── README.md
-├── run.py
-├── setup.py
+└── run.py
 ```
 
 ## Usage
@@ -60,28 +47,34 @@ nc 127.0.0.1 50101
 
 ### filedispatch cli
 ```shell
-usage: filedispatch [-h] [-v] [-H IP] [-P PORT] [-d] [-x] [--no-webapp] [--log-file LOG_FILE] [--log-level LOG_LEVEL] [-p PIDFILE] -c CONFIG
+usage: filedispatch [--with-webapp] [-m] [-x] [--log-level LOG_LEVEL] [--db DB] [--log-file LOG_FILE] [-p PID_FILE] [--server-url SERVER_URL] [--endpoint ENDPOINT] -c CONFIG [--help]
+                    [--version]
+
+filedispath is a simple, configurable, async based and user-friendly cli app for automatic file organization. It listens to a configured source folder for new files and copy or move
+them to the appropriate destination according to the configuration file.
 
 options:
-  -h, --help            show this help message and exit
-  -v, --version         Display the version and exit
-  -H IP, --host IP      web app host ip (default: 127.0.0.1)
-  -P PORT, --port PORT  web app port (default: 3001)
-  -d, --daemon          Run as daemon
-  -x, --exit            Sends SIGTERM to the running daemon
-  --no-webapp           Whether to launch web app
-  --log-file LOG_FILE   Where logs have to come if working in daemon. Ignored if working in foreground.
+  --with-webapp         Launch the embedded web app (type:bool default:False)
+  -m, --move            Move files (type:bool default:False)
+  -x, --exit            Exit the app (type:bool default:False)
   --log-level LOG_LEVEL
-                        Logging level (default: INFO)
-  -p PIDFILE, --pidfile PIDFILE
-                        PID storage path
+                        Set the log level (type:LogLevel default:INFO)
+  --db DB               database file path (type:Optional[Path] default:None)
+  --log-file LOG_FILE   log file path (type:Optional[Path] default:None)
+  -p PID_FILE, --pid-file PID_FILE
+                        pid file path (type:Optional[Path] default:None)
+  --server-url SERVER_URL
+                        webapp host url (type:Optional[HttpUrl] default:None)
+  --endpoint ENDPOINT   webapp endpoint to post log to. (type:Optional[Path] default:api/v1/logs)
   -c CONFIG, --config CONFIG
-                        configuration file to use
+                        config file path (type:FilePath required=True)
+  --help                Print Help and Exit
+  --version             show program's version number and exit
 ```
 
 ### Config file example
-```yaml
 
+```yaml
 source: /home/filedispatch/downloads
 folders:
   - path: ftp://username:password@ftp.foo.org/home/user/videos
@@ -95,10 +88,16 @@ folders:
     extensions: [png, jpg, jpeg, gif, svg]
 ```
 
+## Installation
+1. Clone the repository
+2. Follow steps [poetry]()https://python-poetry.org/docs/#installation to install poetry on your machine
+3. Create a virtualenv `python -m venv venv` (optional, but I highly recommend it) and activate it with `source venv/bin/activate` 
+4. In the project root directory run `poertry build` and `poetry install`.
+5. Done, you can start using filedispatch, I hope you will enjoy using it.
 
 ## Features
 
-+ Support Local file moving
++ Support local file copy 
 + Support Http chunck binary stream file upload
 + Support Ftp file upload 
 + Expose a monitoring web api
@@ -108,7 +107,7 @@ folders:
 ## Main dependencies
 
 + [pydantic](https://pypi.org/project/pydantic/)
-+ [mode-ng](https://pypi.org/project/mode-ng/)
++ [mode-streaming](https://pypi.org/project/mode-streaming/)
 + [watchfiles](https://pypi.org/project/watchfiles/)
 + [aiohttp](https://docs.aiohttp.org/en/stable/)
 + [aioftp](https://pypi.org/project/aioftp/)
@@ -122,20 +121,10 @@ folders:
 ## Known Issues
 
 ## Improvements
-
-- [ ] FIX  config file is needed to exist the daemon. We must be able to do exit the daemon just by providing the pid file
-
-  ```sh
-  $ filedispatch -x -p /path/to/pidfile
-  ```
-
-- [ ] ADD test to sending over ftp.
-- [ ] ADD cli option to decide to keep or remove source after sending complete.
-- [ ] ADD cli option to specify the database location.
+- [ ] REMOVE the coupling between logs production and logs serving (we may produce data even if --with-webapp is False.)
 - [ ] ADD Support to other file sending over HTTP, technics
 - [ ] ADD Support to file sending over SSH.
 - [ ] ADD Support to many-many relationship between file extension and destination.
-- [ ] ADD Support to watching more than one source.
 - [ ] ADD pattern matching on processing. That will, for example, let us:
     - exclude some file that match a pattern.
     - Find destination by pattern matching, not only by extension.
@@ -143,3 +132,6 @@ folders:
 - [ ] ADD Support to text-mining and machine-learning classification algorithm for better experience.
 - [ ] ADD a front-end to the log's API.
 - [ ] ADD Support to Chart Analysis to view daily, weekly and monthly analysis curve of ours activities.
+- [ ] Reformat the config file to make it more generic to support, excluding some files or directories using full path or pattern.
+- [ ] Clean commit on main branch and update the CHANGELOG.
+- [ ] Add file creation date and last update dates to api payload.

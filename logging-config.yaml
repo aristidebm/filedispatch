@@ -1,0 +1,24 @@
+version: 1
+disable_existing_loggers: false
+handlers:
+  console:
+    class: logging.StreamHandler
+    formatter: default
+    level: INFO
+    stream: ext://sys.stdout
+  file:
+    class: logging.handlers.TimedRotatingFileHandler
+    formatter: default
+    level: INFO
+    # roll logs over per day frequency
+    when: D
+    filename:
+    backupCount: 3
+formatters:
+  default:
+    format: '[%(asctime)s] [%(process)d] [%(levelname)-8s]: %(message)s'
+loggers:
+  '':
+    handlers: [console]
+    level: INFO
+    propagate: true

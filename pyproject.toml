@@ -1,8 +1,38 @@
+# https://python-poetry.org/docs/pyproject/
 [tool.poetry]
 name = "filedispatch"
 version = "0.1.0"
-description = ""
+description = "filedispath is a simple, configurable, async based and user-friendly cli app for automatic file organization. It listens to a configured source folder for new files and copy or move them to the appropriate destination according to the configuration file."
 authors = ["Aristide <aristide.bamazi@imsp-uac.org>"]
+# New attributes
+license = "MIT"
+readme = "README.md"
+classifiers=[
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Environment :: No Input/Output (Daemon)",
+    "Environment :: Web Environment",
+    "Intended Audience :: Customer Service",
+    "Intended Audience :: Other Audience",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: System :: Monitoring",
+    "Topic :: System :: Networking",
+    "Topic :: Utilities",
+    "Framework :: AsyncIO",
+]
+homepage="https://github.com/aristidebm/filedispatch"
+repository="https://github.com/aristidebm/filedispatch"
+packages = [
+    {include = "src"}
+]
+include = ["LICENSE"]
+
+[tool.poetry.scripts]
+filedispatch = 'src.cli:main'
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -23,6 +53,7 @@ aiomonitor = "^0.4.5"
 daemons = "^1.3.2"
 typing-extensions = "^4.5.0"
 mode-streaming = "^0.3.5"
+pydantic-cli = "^4.3.0"
 
 [tool.poetry.dev-dependencies]
 black = "^22.6.0"

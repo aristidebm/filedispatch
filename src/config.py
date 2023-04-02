@@ -1,4 +1,5 @@
 import logging
+import yaml
 from typing import List, Union
 from pathlib import Path
 from pydantic import BaseModel, BaseSettings, DirectoryPath, constr, HttpUrl
@@ -30,13 +31,23 @@ class Config:
         try:
             logger.info("Parsing config file ...")
             config = Settings.parse_file(self.config)
-            self._logfile()
+            self._log_config()
             return config
         except (ValidationError, ValueError, OSError) as exp:
             logger.error(exp)
             logger.debug(exp)
             return
 
-    def _logfile(self):
+    def _log_config(self):
         with open(self.config) as f:
             logger.info(f"\n{f.read()}\n")
+
+
+def parse_logger_config(path):
+    config = None
+    try:
+        with open(path, "r") as stream:
+            config = yaml.safe_load(stream)
+    except OSError:
+        pass
+    return config
