@@ -9,11 +9,11 @@ import functools
 import os.path
 import logging
 import pathlib
+import enum
 import traceback
 import sys
 import socket as sock
 from datetime import datetime
-from typing import Literal
 
 import pydantic
 from pydantic import HttpUrl, FilePath
@@ -63,10 +63,17 @@ def setup_logger(args):
     logging.config.dictConfig(logger_config)
 
 
+class LogLevel(str, enum.Enum):
+    INFO = "INFO"
+    DEBUG = "DEBUG"
+    WARN = "WARN"
+    ERROR = "ERROR"
+    CRITICAL = "CRITICAL"
+
+
 class Arguments(BaseModel):
     with_webapp: bool = Field(
         False,
-        title="X",
         description="Launch the embedded web app",
         cli=("--with-webapp",),
     )
@@ -80,8 +87,8 @@ class Arguments(BaseModel):
         description="Exit the app",
         cli=("-x", "--exit"),
     )
-    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] | None = Field(
-        "INFO",
+    log_level: LogLevel = Field(
+        LogLevel.INFO,
         description="Set the log level",
         cli=("--log-level",),
     )
@@ -93,7 +100,7 @@ class Arguments(BaseModel):
     log_file: pathlib.Path | None = Field(
         None,
         description="log file path",
-        cli=("--logfile",),
+        cli=("--log-file",),
     )
     pid_file: pathlib.Path | None = Field(
         None,

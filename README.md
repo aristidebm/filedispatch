@@ -1,8 +1,10 @@
 # File Dispatch
 
-File dispatch is an [asyncio](https://docs.python.org/3.9/library/asyncio.html) based directory watcher that 
-basically watch a directory for some configured file extension and send the received file
-to some configured destination.
+**filedispath** is a simple, configurable, async based and user-friendly cli app
+for automatic file organization. It listens to a configured source folder for
+new files and copy or move them to the appropriate destination according to
+the configuration file.
+
 
 ## Project structure
 ```
@@ -98,7 +100,7 @@ folders:
 
 ## Features
 
-+ Support Local file moving
++ Support local file copy 
 + Support Http chunck binary stream file upload
 + Support Ftp file upload 
 + Expose a monitoring web api
@@ -147,11 +149,11 @@ folders:
 
 #### TODOS
 
-- [ ] Rewrite tests. currently unit tests looks more like integration tests than unit tests (lot of components mocking). We want to fix that.
-- [ ] Rewrite config parsing components to let it behave as a service we request configuration from.
-- [ ] Support project level log configuration (in a yaml file)
-- [ ] Look for code to clean and refactor.
+- [x] Rewrite tests. currently unit tests looks more like integration tests than unit tests (lot of components mocking). We want to fix that.
+- [x] Rewrite config parsing components to let it behave as a service we request configuration from.
+- [x] Support project level log configuration (in a yaml file)
+- [x] Look for code to clean and refactor.
 - [ ] Reformat the config file to make it more generic to support, excluding some files or directories using full path or pattern.
 - [ ] Clean commit on main branch and update the CHANGELOG.
 - [ ] Add information on the file creation and last update dates.
-- [ ] Treat (filename, destination) as a Message (Add a Message Dataclass)
+- [x] Treat (filename, destination) as a Message (Add a Message Dataclass)

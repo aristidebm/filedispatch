@@ -7,7 +7,7 @@ pytestmark = pytest.mark.notif
 
 @pytest.mark.asyncio
 async def test_notifier_successfully_send_logs_to_webapp(mocker):
-    sut = Notifier(port=8000, host="127.0.0.1")
+    sut = Notifier(url="http://127.0.0.1:8000/api/v1/logs/")
     sut._handle_failure = mocker.AsyncMock()
 
     payload = {
@@ -30,7 +30,7 @@ async def test_notifier_successfully_send_logs_to_webapp(mocker):
 
 @pytest.mark.asyncio
 async def test_should_handle_webapp_failures(mocker):
-    sut = Notifier(port=8000, host="127.0.0.1")
+    sut = Notifier(url="http://127.0.0.1:8000/api/v1/logs/")
     sut._handle_failure = mocker.AsyncMock()
 
     payload = {
