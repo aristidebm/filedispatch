@@ -102,7 +102,6 @@ class FileWorker(BaseWorker):
     fancy_name = "File worker"
 
     async def process(self, message, delete=False, **kwargs):
-
         if not is_processable(message):
             return
 
@@ -131,7 +130,6 @@ class HttpWorker(BaseWorker):
     fancy_name = "HTTP worker"
 
     async def process(self, message, delete=False, **kwargs):
-
         if not is_processable(message):
             return
 
@@ -176,7 +174,6 @@ class FtpWorker(BaseWorker):
     fancy_name = "FTP worker"
 
     async def process(self, message, delete=False, **kwargs):
-
         if not is_processable(message):
             return
 
