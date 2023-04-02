@@ -93,7 +93,7 @@ folders:
 2. Follow steps [poetry]()https://python-poetry.org/docs/#installation to install poetry on your machine
 3. Create a virtualenv `python -m venv venv` (optional, but I highly recommend it) and activate it with `source venv/bin/activate` 
 4. In the project root directory run `poertry build` and `poetry install`.
-5. Here are you are, you can test filedispatch, I hope you will have a good experience with it.
+5. Done, you can start using filedispatch, I hope you will enjoy using it.
 
 ## Features
 
@@ -121,7 +121,7 @@ folders:
 ## Known Issues
 
 ## Improvements
-- [ ] REMOVE the compling between logs production and logs serving (we may produce data even if --with-webapp is False.)
+- [ ] REMOVE the coupling between logs production and logs serving (we may produce data even if --with-webapp is False.)
 - [ ] ADD Support to other file sending over HTTP, technics
 - [ ] ADD Support to file sending over SSH.
 - [ ] ADD Support to many-many relationship between file extension and destination.
