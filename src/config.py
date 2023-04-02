@@ -43,7 +43,7 @@ class Config:
             logger.info(f"\n{f.read()}\n")
 
 
-def parse_logging_config(path):
+def parse_logger_config(path):
     config = None
     try:
         with open(path, "r") as stream:

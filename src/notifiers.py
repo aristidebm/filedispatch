@@ -13,16 +13,11 @@ from aiohttp_retry import RetryClient
 class Notifier(mode.Service):
     def __init__(
         self,
-        host: str,
-        port: int,
-        path="/api/v1/logs",
-        scheme: str = "http",
+        url,
         *args,
         **kwargs,
     ):
-        host = host and host.strip("/")
-        path = path.strip("/")
-        self.url = f"{scheme}://{host}:{port}/{path}"
+        self.url = url
         self.unprocessed: Queue[dict] = Queue()
         super().__init__(*args, **kwargs)
 

@@ -37,10 +37,10 @@ class FileWatcher(BaseWatcher):
     def __init__(
         self,
         config: Settings,
-        router: Router | None = None,
         *,
-        host: str = None,
-        port: int = None,
+        router: Router | None = None,
+        server_url: str | None = None,
+        endpoint: str | None = None,
         log_file: PATH = None,
         log_level: str = None,
         with_webapp: bool = False,
@@ -49,8 +49,8 @@ class FileWatcher(BaseWatcher):
         **kwargs,
     ):
         self._config = config
-        self._web_app_host = host or "127.0.0.1"
-        self._web_app_port = port or 3001
+        self._server_url = server_url
+        self._endpoint = endpoint
         self._with_webapp = with_webapp
         self._log_file = log_file
         self._log_level = log_level
@@ -76,15 +76,10 @@ class FileWatcher(BaseWatcher):
     def _init_workers(self) -> list[mode.ServiceT]:
         workers = []
         for p in self.PROCESSORS_REGISTRY.values():
-            if self._with_webapp:
-                # FIXME: Perhaps only one Notify is suffisent ? It can be interesting
-                #  to consider if we are sure of less traffic between workers and notifier.
-                p.notifier = Notifier(
-                    loop=self.loop,
-                    host=self._web_app_host,
-                    port=self._web_app_port,
-                    scheme="http",
-                )
+            if self._server_url:
+                # FIXME: Isn't better to share the Notifier between all workers ?
+                url = f"{self._server_url.removesuffix('/')}/{self._endpoint}"
+                p.notifier = Notifier(loop=self.loop, url=url)
             # Share the same event loop between all dependencies so that we will not experiment wired
             # behaviors due to each dependency runs on it own event loop.
             p.loop = self.loop
