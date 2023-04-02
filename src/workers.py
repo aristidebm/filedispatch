@@ -13,7 +13,7 @@ import aiofiles
 import aiofiles.os as aiofiles_os
 from aiohttp_retry import RetryClient
 
-from .utils import PATH, get_payload, FtpUrl, StatusEnum, Message
+from .utils import get_payload, FtpUrl, StatusEnum, Message
 
 copyfile = aiofiles_os.wrap(shutil.copyfile)
 unlink = aiofiles_os.wrap(os.unlink)
@@ -111,7 +111,7 @@ class FileWorker(BaseWorker):
         try:
             basename = os.path.basename(filename)
             await copyfile(filename, os.path.join(destination, basename))
-            self.logger.info(f"File {filename} moved to {destination}")
+            self.logger.info(f"File {filename} sent to {destination}")
             asyncio.create_task(
                 self._notify(message, StatusEnum.SUCCEEDED, delete=delete)
             )

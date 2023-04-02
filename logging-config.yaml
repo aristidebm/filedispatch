@@ -7,16 +7,16 @@ handlers:
     level: INFO
     stream: ext://sys.stdout
   file:
-    class: logging.handlers.RotatingFileHandler
+    class: logging.handlers.TimedRotatingFileHandler
     formatter: default
     level: INFO
+    # roll logs over per day frequency
+    when: D
     filename:
-    maxBytes: 1024
     backupCount: 3
 formatters:
   default:
-    format: '[%(asctime)s] [%(process)d] [%(levelname)]: %(message)s'
-    datefmt: '%Y-%m-%d %H:%M:%S'
+    format: '[%(asctime)s] [%(process)d] [%(levelname)-8s]: %(message)s'
 loggers:
   '':
     handlers: [console]

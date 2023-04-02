@@ -41,7 +41,7 @@ class Notifier(mode.Service):
                 return
 
     async def _handle_notification(self, client, payload):
-        async with client.post(self.url) as response:
+        async with client.post(self.url, json=payload) as response:
             self.logger.debug(f"\n{json.dumps(payload, indent=2)}")
             if not response.ok:
                 await self._handle_failure(response)

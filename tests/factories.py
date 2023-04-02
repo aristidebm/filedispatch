@@ -3,7 +3,7 @@ from typing import Any
 
 from pydantic_factories import ModelFactory
 
-from src.schema import WriteOnlyLogEntry
+from src.schemas import WriteOnlyLogEntry
 from src.utils import FtpUrl
 
 

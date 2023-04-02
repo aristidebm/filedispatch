@@ -121,7 +121,7 @@ async def get_filesize(filename):
 
 
 async def get_payload(filename, destination, status, processor, reason=None):
-    import src.schema  # FIXME: Fix it just temporary solution
+    import src.schemas  # FIXME: Fix it just temporary solution
 
     extension = os.path.splitext(filename)[1].removeprefix(".")
 
@@ -133,7 +133,7 @@ async def get_payload(filename, destination, status, processor, reason=None):
         _byte_size = None
 
     return json.loads(
-        src.schema.WriteOnlyLogEntry(
+        src.schemas.WriteOnlyLogEntry(
             filename=os.path.basename(filename),
             destination=str(destination),
             source=os.path.dirname(filename),

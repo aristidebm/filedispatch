@@ -10,7 +10,7 @@ import aiosqlite
 from pydantic import parse_obj_as
 from pypika import CustomFunction, Order
 
-from src.schema import ReadOnlyLogEntry, WriteOnlyLogEntry, QueryDict
+from src.schemas import ReadOnlyLogEntry, WriteOnlyLogEntry, QueryDict
 
 from .queries import (
     CreateTableQuery,

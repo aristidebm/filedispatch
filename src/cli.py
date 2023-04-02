@@ -49,16 +49,19 @@ class ExceptionHandler:
 def setup_logger(args):
     logger_config = parse_logger_config(BASE_DIR / "logging-config.yaml")
 
-    if logger_config and args.pidfile and args.log_file:
+    if logger_config and args.pid_file and args.log_file:
         logger_config["loggers"][""]["handlers"].append("file")
         logger_config["handlers"]["file"]["filename"] = str(args.log_file)
 
+    if logger_config and not args.pid_file:
+        logger_config["handlers"].pop("file", None)
+
     if logger_config and args.log_level:
         for h in logger_config.get("handlers", []):
-            logger_config["handlers"][h]["level"] = str(args.log_level)
+            logger_config["handlers"][h]["level"] = args.log_level.value
 
         for s in logger_config.get("loggers", []):
-            logger_config["loggers"][s]["level"] = str(args.log_level)
+            logger_config["loggers"][s]["level"] = args.log_level.value
 
     logging.config.dictConfig(logger_config)
 
@@ -159,6 +162,9 @@ class Arguments(BaseModel):
         if with_webapp and not values.get("db"):
             raise ValueError("The database file is required to start the local webapp.")
 
+        if with_webapp:
+            values["endpoint"] = "api/v1/logs"
+
         if exit and not pid_file:
             raise ValueError("The pidfile is requiered to exit the daemon.")
 
@@ -218,7 +224,7 @@ def run(args: Arguments):
         endpoint=args.endpoint and str(args.endpoint),
         log_file=args.log_file,
         db=args.db,
-        log_level=args.log_level,
+        log_level=args.log_level.value,
         with_webapp=args.with_webapp,
         delete=args.move,
     )

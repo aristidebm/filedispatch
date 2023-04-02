@@ -72,7 +72,7 @@ class WebServer(mode.Service):
     @cached_property
     def runner(self):
         app = make_app(self._db)
-        runner = web.AppRunner(app, logger=self.logger)
+        runner = web.AppRunner(app, logger=self.logger, access_log=self.logger)
         return runner
 
     async def run_app(self):

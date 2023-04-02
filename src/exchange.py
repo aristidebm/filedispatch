@@ -5,6 +5,7 @@ from pathlib import Path
 from asyncio import Queue
 
 import mode
+import pydantic
 from watchfiles import awatch, Change
 import aiofiles
 
@@ -64,9 +65,7 @@ class FileWatcher(BaseWatcher):
         self._init_workers()
         if self._with_webapp:
             self.add_dependency(self.server)
-            self.logger.info("The webapp is enabled.")
-        else:
-            self.logger.info("The webapp is disabled.")
+            self.logger.info("The webapp is launched.")
 
     def on_init_dependencies(self):
         dependencies = super().on_init_dependencies()
@@ -80,8 +79,7 @@ class FileWatcher(BaseWatcher):
                 # FIXME: Isn't better to share the Notifier between all workers ?
                 url = f"{self._server_url.removesuffix('/')}/{self._endpoint}"
                 p.notifier = Notifier(loop=self.loop, url=url)
-            # Share the same event loop between all dependencies so that we will not experiment wired
-            # behaviors due to each dependency runs on it own event loop.
+            # Share the same event loop between all dependencies to prevent weired errors.
             p.loop = self.loop
             p._delete = self._delete
             workers.append(p)
@@ -113,10 +111,11 @@ class FileWatcher(BaseWatcher):
 
     @functools.cached_property
     def server(self):
+        url = pydantic.parse_obj_as(pydantic.HttpUrl, self._server_url)
         return WebServer(
             loop=self.loop,
-            host=self._web_app_host,
-            port=self._web_app_port,
+            host=url.host,
+            port=int(url.port),
             db=self._db,
         )
 
@@ -141,7 +140,6 @@ class FileWatcher(BaseWatcher):
                 if not await aiofiles.os.path.isfile(filename):
                     continue
 
-                # FIXME: find_destination should be moved to config service.
                 destination = self._search_destination(filename, config=config)
 
                 if not destination:
