@@ -45,6 +45,7 @@ class FileWatcher(BaseWatcher):
         log_level: str = None,
         with_webapp: bool = False,
         delete: bool = False,
+        db: str = None,
         **kwargs,
     ):
         self._config = config
@@ -56,6 +57,7 @@ class FileWatcher(BaseWatcher):
         self.unprocessed: Queue[Message] = Queue()
         self._router = router or DefaultRouter(workers=self.PROCESSORS_REGISTRY)
         self._delete = delete
+        self._db = db
         super().__init__(**kwargs)
 
     def __post_init__(self) -> None:
@@ -120,6 +122,7 @@ class FileWatcher(BaseWatcher):
             loop=self.loop,
             host=self._web_app_host,
             port=self._web_app_port,
+            db=self._db,
         )
 
     @mode.Service.task

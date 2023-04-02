@@ -153,7 +153,7 @@ def move_dict_key_to_top(data, key):
 
 
 def isfile(filename):
-    return os.path.isfile(filename)
+    return os.path.isfile(filename) and not os.path.islink(filename)
 
 
 def has_permission(filename, mode):

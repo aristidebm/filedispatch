@@ -34,7 +34,7 @@ from .models import Dao
 __version__ = "0.1.0"
 
 
-def make_app(db: PATH = None):
+def make_app(db: PATH):
     app = web.Application()
     app.add_routes(routes)
     # setup open api documentation as stated here (
@@ -45,17 +45,16 @@ def make_app(db: PATH = None):
         title_spec="File Dispatch Monitoring Api",
         version_spec=__version__,
     )
-    app["dao"] = Dao(
-        connector=partial(aiosqlite.connect, db or BASE_DIR / "db.sqlite3")
-    )
+    app["dao"] = Dao(connector=partial(aiosqlite.connect, db))
     return app
 
 
 class WebServer(mode.Service):
-    def __init__(self, host, port, **kwargs):
+    def __init__(self, host, port, db, **kwargs):
         super().__init__(**kwargs)
         self.host = host
-        self.port: int = port
+        self.port = port
+        self._db = db
 
     async def on_started(self) -> None:
         await self.runner.app["dao"].create_table()
@@ -72,7 +71,7 @@ class WebServer(mode.Service):
 
     @cached_property
     def runner(self):
-        app = make_app()
+        app = make_app(self._db)
         runner = web.AppRunner(app, logger=self.logger)
         return runner
 

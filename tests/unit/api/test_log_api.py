@@ -16,8 +16,10 @@ BASE_URL = Path(__file__).parent.parent.parent
 
 
 @pytest_asyncio.fixture
-async def client(aiohttp_client):
-    app = make_app(db=BASE_URL / "test_db.sqlite3")
+async def client(aiohttp_client, tmp_path):
+    db = tmp_path / "test-db.sqlite3"
+    db.touch()
+    app = make_app(db=db)
     dao = app["dao"]
     await dao.create_table()
     clt = await aiohttp_client(app)
