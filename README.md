@@ -37,6 +37,25 @@ the configuration file.
 └── run.py
 ```
 
+## Why filedispatch ?
+
+**filedispatch**, just because I am lazy but still want to keep my file organized on my computer, especially my download
+files, below is my local configuration to keep all my downloaded videos under `$HOME/Videos`. If tomorrow I want to keep
+under another directory, all I have to do is to change the destination folder and restart the service (live config reloading is not supported)
+
+```shell
+source: SHOME/Downloads
+folders:
+  - path: $SHOME/Videos
+    extensions: [mp4, flv, avi, mov, wmv, webm, mkv]
+```
+
+The decisions made on this project might not be the best, the first purpose of this app was to learn how message queues
+basically works, to learn async programming in python and to learn how to build things from scratch using
+low level libraries and assemble them into a project that works. Feel free to fork the project if needed to customize it
+as you want. It was an interesting journey, I have discovered lots of good libraries to do pretty interesting stuffs, I tried
+my best to enumerate them into **Main dependencies** section, but the list is not exhaustive. Stay safe and happy coding.
+
 ## Usage
 
 ### Monitor running services [source](https://pypi.org/project/aiomonitor-ng/)
@@ -118,7 +137,11 @@ folders:
 
 ## Tests
 
-## Known Issues
+In the project root folder, run the command above.
+
+```sh
+make test
+```
 
 ## Improvements
 - [ ] REMOVE the coupling between logs production and logs serving (we may produce data even if --with-webapp is False.)
